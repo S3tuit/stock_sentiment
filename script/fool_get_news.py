@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from typing import List
 
 from confluent_kafka import SerializingProducer
-from confluent_kafka.admin import AdminClient, NewTopic
+from confluent_kafka.admin import AdminClient
 
 from confluent_kafka.serialization import StringSerializer
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -25,7 +25,7 @@ PREFIXES_FOOL = [r'https://www.fool.com/quote/nasdaq/',
                 r'https://www.fool.com/quote/nyse/']
 
 BOOTSTRAP_SERVERS = "localhost:9092"
-TOPIC_NAME = "stock.news.v1"
+TOPIC_NAME = "stock.news.v2"
 SCHEMA_REGISTRY_URL = "http://localhost:8081"
 
 
@@ -34,24 +34,6 @@ logger = logging.getLogger()
 
 
 app = FastAPI()
-
-
-# create the topic if it doesn't exist
-@app.on_event('startup')
-async def startup_event():
-    client = AdminClient({'bootstrap.servers': BOOTSTRAP_SERVERS})
-    topic = NewTopic(TOPIC_NAME,
-                     num_partitions=1,
-                     replication_factor=1)
-    
-    # check if the topic already exists or create a new one
-    try:
-        futures = client.create_topics([topic])
-        for topic_name, future in futures.items():
-            future.result()
-            logger.info(f"Create topic {topic_name}")
-    except Exception as e:
-        logger.warning(e)
 
 
 # helper function to create a producer

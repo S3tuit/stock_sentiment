@@ -13,7 +13,7 @@ dependencies:
   - beautifulsoup4
   - python-confluent-kafka
   - fastavro
-  - lxml
+  - aiohttp
   - pip
   - pip:
     - openai
