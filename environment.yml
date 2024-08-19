@@ -1,0 +1,19 @@
+# Define the conda python environment
+name: py_kafka
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - fastapi
+  - python-dotenv
+  - pyyaml
+  - uvicorn
+  - httpie
+  - beautifulsoup4
+  - python-confluent-kafka
+  - fastavro
+  - lxml
+  - pip
+  - pip:
+    - openai

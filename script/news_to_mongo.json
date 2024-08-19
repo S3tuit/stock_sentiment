@@ -1,0 +1,13 @@
+{
+    "name": "news_to_mongo",
+    "connection.uri": "mongodb://peppa:peppa@mongodb:27017",
+    "database": "kafka",
+    "collection": "stock_articles_v1",
+    "topics": "stock.news.v1",
+    "connector.class": "com.mongodb.kafka.connect.MongoSinkConnector",
+    "tasks.max": 1,
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "http://schema-registry:8081"
+}
