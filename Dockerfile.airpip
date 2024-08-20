@@ -1,0 +1,11 @@
+# Dockerfile
+
+FROM apache/airflow:2.7.0
+
+# Copy the requirements.txt file into the image
+COPY requirements.txt /requirements.txt
+
+# Install the packages from requirements.txt and other Airflow dependencies
+RUN pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" \
+    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.7.0/constraints-3.8.txt" \
+    -r /requirements.txt
