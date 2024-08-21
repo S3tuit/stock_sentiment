@@ -1,30 +1,31 @@
-from datetime import datetime, timedelta
-from airflow.decorators import dag, task
 
+from datetime import datetime, timedelta
 import requests
 import logging
 from bs4 import BeautifulSoup
 
+from airflow.decorators import dag, task
+from airflow.models import Variable
+
 from helper.models import Article
 from helper.kafka_produce import make_producer, ProducerCallback
 from helper import schemas
-from confluent_kafka.serialization import StringSerializer
 
 
-from confluent_kafka import Producer
 
-
-# Find them at https://rapidapi.com/apidojo/api/seeking-alpha/playground
-API_KEY = '3f7b06e7a8msh390b7f13312554ep1ecb05jsnbae1915ac3c3'
-API_HOST = "seeking-alpha.p.rapidapi.com"
-
-BOOTSTRAP_SERVERS = "localhost:9092"
+# Constants for Kafka and API configurations
 TOPIC_NAME = "test.articles"
-# SCHEMA_REGISTRY_URL = "http://localhost:8081"
-SCHEMA_REGISTRY_URL = "http://schema-registry:8081"
+API_KEY = Variable.get("SEEK_ALPHA_API_KEY")
+API_HOST = Variable.get("SEEK_ALPHA_API_HOST")
+SCHEMA_REGISTRY_URL = Variable.get("SCHEMA_REGISTRY_URL")
+BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 
+
+tickets = ['ACMR', 'RIOT']
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 
@@ -35,41 +36,60 @@ logger = logging.getLogger()
     tags=["stock_sentiment"]
 )
 def seeking_alpha_extract():
-    
+    """
+    DAG to extract article data from the Seeking Alpha API, process the data,
+    and produce it to a Kafka topic.
+    """
+
+
     @task(
         task_id='get_the_links',
         retries=0,
         retry_delay=timedelta(seconds=5)
     )
-    def get_news_links_task(ticket='RIOT', num=1):
+    def get_news_links_task(tickets, num=1):
+        """
+        Task to retrieve news links for a specific stock ticker list from the Seeking Alpha API.
+        
+        Args:
+            ticket (list): A list of stock ticker symbol.
+            num (int): The number of articles to fetch.
+        
+        Returns:
+            list: A list of dictionaries containing article metadata.
+        """
         url = "https://seeking-alpha.p.rapidapi.com/news/v2/list-by-symbol"
-        querystring = {"size": num, "number": "1", "id": ticket}
+        articles_to_process = []
         headers = {
             "x-rapidapi-key": API_KEY,
             "x-rapidapi-host": API_HOST
         }
-        
-        articles_to_process = {}
 
-        # try:
-        #     response = requests.get(url, headers=headers, params=querystring)
-        #     response.raise_for_status()
-        #     data = response.json()
+        for ticket in tickets:
+            querystring = {"size": num, "number": "1", "id": ticket}
+            
+            response = requests.get(url, headers=headers, params=querystring)
+            response.raise_for_status()
+            data = response.json()
 
-        #     for row in data['data']:
-        #         date_str = row['attributes']['publishOn']
-        #         date_time = datetime.fromisoformat(date_str)
-        #         unix_timestamp = int(date_time.timestamp())
+            # For details about the response visit:
+            # https://rapidapi.com/apidojo/api/seeking-alpha/playground/apiendpoint_26d058f9-bc94-4bf6-b6d7-e405379006b3
+            for row in data['data']:
+                date_str = row['attributes']['publishOn']
+                date_time = datetime.fromisoformat(date_str)
+                unix_timestamp = int(date_time.timestamp())
 
-        #         articles_to_process[row['id']] = {
-        #             'timestp': unix_timestamp,
-        #             'title': row['attributes']['title'],
-        #             'ticket': ticket
-        #         }
-        # except requests.RequestException as e:
-        #     logger.error(f"HTTP Request failed: {e}")
+                articles_to_process.append({
+                    'id': row['id'],
+                    'timestp': unix_timestamp,
+                    'title': row['attributes']['title'],
+                    'ticket': ticket
+                })
+                
+            logger.info(f"Successfully retrieved {len(articles_to_process)} articles for ticker {ticket}.")
 
         return articles_to_process
+
 
 
     @task(
@@ -78,99 +98,60 @@ def seeking_alpha_extract():
         retry_delay=timedelta(seconds=5),
         execution_timeout=timedelta(seconds=30)
     )
-    def process_links_task(articles):
+    def process_links_task(raw_articles):
+        """
+        Task to process raw article data, extract content, and produce it to a Kafka topic.
+        
+        Args:
+            raw_articles (list): List of dictionaries containing raw article metadata.
+        """
         url = "https://seeking-alpha.p.rapidapi.com/news/get-details"
         headers = {
             "x-rapidapi-key": API_KEY,
             "x-rapidapi-host": API_HOST
         }
-        
-        # producer = make_producer(
-        #             schema_reg_url=SCHEMA_REGISTRY_URL,
-        #             bootstrap_server=BOOTSTRAP_SERVERS,
-        #             schema=schemas.article_schema_v1
-        #         )
-        
-        producer_config = {
-            'bootstrap.servers': BOOTSTRAP_SERVERS
-        }
-        producer = Producer(producer_config)
-        print('Producer created.')
-        
-        article = Article(
-            ticket='Peppa',
-            timestp=7,
-            article_body="I'm Peppa Pig.",
-            title='Papa che e',
-            url='testing'
+
+        producer = make_producer(
+            schema_reg_url=SCHEMA_REGISTRY_URL,
+            bootstrap_server=BOOTSTRAP_SERVERS,
+            schema=schemas.article_schema_v1
         )
-        
-        print('---------------')
-        print(article)
-        print('---------------')
-        producer.produce(
-                    topic=TOPIC_NAME,
-                    key=article.ticket.lower(),
-                    value=article
-                )
-                
-        print('Article produced.')
+        logger.info("Kafka producer created successfully.")
 
-        print("Flushing.")
+        for raw_article in raw_articles:
+            querystring = {"id": raw_article['id']}
+            response = requests.get(url, headers=headers, params=querystring)
+            response.raise_for_status()
+            data = response.json()
+
+            soup = BeautifulSoup(data['data']['attributes']['content'], 'html.parser')
+            article_content = soup.get_text()
+
+            article = Article(
+                ticket=raw_article['ticket'],
+                timestp=raw_article['timestp'],
+                url=data['data']['links']['canonical'],
+                title=raw_article['title'],
+                article_body=article_content
+            )
+                
+            logger.info(f"Processed article: {article.title}")
+
+            producer.produce(
+                topic=TOPIC_NAME,
+                key=article.ticket.lower(),
+                value=article,
+                on_delivery=ProducerCallback(article)
+            )
+                
+            logger.info(f"Produced article {article.title} to Kafka topic {TOPIC_NAME}.")
+
         producer.flush()
-        print("Flushed.")
-
-        # try:
-        #     for id in articles:
-                
-        #         producer = make_producer(
-        #             schema_reg_url=SCHEMA_REGISTRY_URL,
-        #             bootstrap_server=BOOTSTRAP_SERVERS,
-        #             schema=schemas.article_schema_v1
-        #         )
-        #         print('Producer created.')
-                
-        #         querystring = {"id": id}
-        #         response = requests.get(url, headers=headers, params=querystring)
-        #         response.raise_for_status()
-        #         data = response.json()
-
-        #         soup = BeautifulSoup(data['data']['attributes']['content'], 'html.parser')
-        #         article_content = soup.get_text()
-
-        #         article = Article(
-        #             ticket=articles[id]['ticket'],
-        #             timestp=articles[id]['timestp'],
-        #             url=data['data']['links']['canonical'],
-        #             title=articles[id]['title'],
-        #             article_body=article_content
-        #         )
-                
-        #         print('Article processed:')
-        #         print('---------------------------------------------')
-        #         print(article)
-        #         print('---------------------------------------------')
-
-        #         producer.produce(
-        #             topic=TOPIC_NAME,
-        #             key=article.ticket.lower(),
-        #             value=article,
-        #             on_delivery=ProducerCallback(article)
-        #         )
-                
-        #         print('Article produced.')
-
-        #         print("Flushing.")
-        #         producer.flush()
-        #         print("Flushed.")
-        # except requests.RequestException as e:
-        #     logger.error(f"HTTP Request failed: {e}")
-        # except Exception as e:
-        #     logger.error(f"Failed to process links: {e}")                           
+        logger.info("Kafka producer flushed successfully.")
 
 
-    
-    articles = get_news_links_task()
+    articles = get_news_links_task(tickets)
     process_links_task(articles)
-                
+
+
 seeking_alpha_extract()

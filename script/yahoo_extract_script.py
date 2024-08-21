@@ -1,10 +1,11 @@
 
-from script.helper.models import Article
-import helper
+from helper.models import Article
+import helper.schemas as schemas
+from helper.yahoo import fetch_yahoo, fetch_yahoo_article_content
 
-import logging
-from fastapi import FastAPI
+import asyncio
 from typing import List
+import logging
 
 from confluent_kafka import SerializingProducer
 from confluent_kafka.admin import AdminClient
@@ -13,27 +14,26 @@ from confluent_kafka.serialization import StringSerializer
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroSerializer
 
-import script.helper.schemas as schemas
-from script.helper.models import Article
 
-
+# Define variables
 HEADERS = {
-'article-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36 Edg/85.0.564.44'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
 }
-TICKET = 'riot'
-PREFIXES_FOOL = [r'https://www.fool.com/quote/nasdaq/',
-                r'https://www.fool.com/quote/nyse/']
+cookies = {
+    'GUC': 'AQABCAFmwcNm80IfWgSU&s=AQAAAGoqDQ7v&g=ZsB0FA',
+    'A1': 'd=AQABBBbSSWYCEMGNccbgJJ6fo37cGXpNRK4FEgABCAHDwWbzZudVb2UBAiAAAAcIFNJJZkCw6_E&S=AQAAAhcGLnTIGaPvJkY30Nu1ux4',
+    'A3': 'd=AQABBBbSSWYCEMGNccbgJJ6fo37cGXpNRK4FEgABCAHDwWbzZudVb2UBAiAAAAcIFNJJZkCw6_E&S=AQAAAhcGLnTIGaPvJkY30Nu1ux4',
+    'A1S': 'd=AQABBBbSSWYCEMGNccbgJJ6fo37cGXpNRK4FEgABCAHDwWbzZudVb2UBAiAAAAcIFNJJZkCw6_E&S=AQAAAhcGLnTIGaPvJkY30Nu1ux4',
+    'PRF': 't%3DACMR%26newChartbetateaser%3D0%252C1725284010825'
+}
 
 BOOTSTRAP_SERVERS = "localhost:9092"
-TOPIC_NAME = "stock.news.v2"
+TOPIC_NAME = "test.articles"
 SCHEMA_REGISTRY_URL = "http://localhost:8081"
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
-
-
-app = FastAPI()
 
 
 # helper function to create a producer
@@ -74,44 +74,23 @@ class ProducerCallback:
                         """)
 
 
-@app.post('/api/news', status_code=201, response_model=List[str])
-async def get_stock_news(ticket: str) -> List[str]:
+async def get_stock_news(tickets):
 
     producer = make_producer()
-    fool_links = []
     
-    # get the links
-    for prefix in PREFIXES_FOOL:
-        try:
-            url = prefix + ticket + '/'
-            links = helper.fool_get_news_links(url, HEADERS)
-            
-            # if the function finds no link it stops
-            if links:
-                fool_links = fool_links + links
+    for ticket in tickets:
+        # Get the tasks to run
+        articles = await fetch_yahoo(ticket=ticket, headers=HEADERS, cookies=cookies)
         
-        except Exception as e:
-            print('Something whent wrong :(. ', e)
-    
-    article = helper.extract_articles(headers=HEADERS, ticket=ticket)
-    processed_urls = []
-    
-    
-    for fool_link in fool_links:
+        # Run the tasks
+        for article in articles:
+            if article:
+                producer.produce(topic=TOPIC_NAME,
+                                key=article.ticket.lower(),
+                                value=article,
+                                on_delivery=ProducerCallback(article))
         
-        try:
-            article = helper.fool_get_article_info(url=fool_link, headers=HEADERS, ticket=ticket)
-            
-            producer.produce(topic=TOPIC_NAME,
-                            key=article.ticket.lower(),
-                            value=article,
-                            on_delivery=ProducerCallback(article))
-            processed_urls.append(fool_link)
-            
-        except Exception as e:
-            print(f"Something went wrong while extracting the url: {fool_link}", e)
-            
-    
-    producer.flush()
-    
-    return processed_urls
+        producer.flush()
+        
+tickets = ['ACMR', 'RIOT']
+asyncio.run(get_stock_news(tickets))

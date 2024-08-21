@@ -7,8 +7,8 @@ from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroDeserializer
 from confluent_kafka.serialization import StringDeserializer
 
-import schemas
-from models import Article
+import script.helper.schemas as schemas
+from script.helper.models import Article
 
 
 BOOTSTRAP_SERVERS = "localhost:9092"

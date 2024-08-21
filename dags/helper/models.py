@@ -7,4 +7,4 @@ class Article(BaseModel):
     url: Optional[str] = None
     title: Optional[str] = None
     article_body: Optional[str] = None
-    timestp: Optional[str] = None
+    timestp: Optional[int] = None

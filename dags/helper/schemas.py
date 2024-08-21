@@ -38,7 +38,7 @@ article_schema_v1 = """
             "name": "timestp",
             "type": [
                 "null",
-                "string"
+                "long"
             ],
             "default": null
         }

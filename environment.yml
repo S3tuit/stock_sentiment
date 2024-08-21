@@ -18,3 +18,4 @@ dependencies:
   - pip:
     - openai
     - apache-airflow
+    - apache-airflow-providers-apache-kafka==1.1.2

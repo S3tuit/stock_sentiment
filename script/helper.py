@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 import re
-from models import Article
+from script.helper.models import Article
 from typing import List
 
 
