@@ -144,6 +144,7 @@ services:
       KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
       DYNAMIC_CONFIG_ENABLED: 'true'
 
+# MONGO
   mongodb:
     image: mongo:5.0
     container_name: mongodb

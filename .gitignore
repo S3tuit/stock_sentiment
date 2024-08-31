@@ -13,6 +13,8 @@ __pycache__/
 plugins/
 logs/
 config/
+# Directory used for airflow variables
+airflow_variables/
 
 # Distribution / packaging
 .Python

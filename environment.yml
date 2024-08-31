@@ -14,6 +14,7 @@ dependencies:
   - python-confluent-kafka
   - fastavro
   - aiohttp
+  - pymongo
   - pip
   - pip:
     - openai
