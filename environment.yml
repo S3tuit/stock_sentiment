@@ -20,5 +20,3 @@ dependencies:
     - openai
     - apache-airflow
     - apache-airflow-providers-apache-kafka==1.1.2
-    - Werkzeug==2.3.7
-    - flask==2.1.3
