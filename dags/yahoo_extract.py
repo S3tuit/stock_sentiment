@@ -70,7 +70,7 @@ def yahoo_extract():
             
             if response.status_code != 200:
                 logger.error(f'Failed to retrieve content for ticket {ticket}. Status code: {response.status_code}')
-                continue
+                response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
             
@@ -147,6 +147,7 @@ def yahoo_extract():
                     logger.warning(f"Article body NOT found for the link {raw_article['link']}.")
             else:
                 logger.error(f"Failed to fetch the article content for link {raw_article['link']}. Status code: {response.status_code}")
+                response.raise_for_status()
 
         producer.flush()
         logger.info("Kafka producer flushed successfully.")
