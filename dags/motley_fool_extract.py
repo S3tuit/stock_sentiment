@@ -57,7 +57,7 @@ def motley_fool_extract():
         for ticket in tickets:
             url = f'https://www.fool.com/quote/nasdaq/{ticket}/'
             
-            soup = get_soup(logger=logger, ticket=ticket, url=url, headers=HEADERS)
+            soup = get_soup(logger=logger, ticket=ticket, urls=[url], headers=HEADERS)
             
             # Locate the section on the main page with the article links
             news_div = soup.find(id="quote-news-analysis")
@@ -102,7 +102,7 @@ def motley_fool_extract():
             
             url = 'https://www.fool.com/' + basic_article['url']
             logger.info(f'Making request for: {url}')
-            soup = get_soup(logger=logger, ticket=basic_article['ticket'], url=url, headers=HEADERS)
+            soup = get_soup(logger=logger, ticket=basic_article['ticket'], urls=[url], headers=HEADERS)
             logger.info(f'Request made for: {url}')
             
             article_body = soup.select('div.article-body')
