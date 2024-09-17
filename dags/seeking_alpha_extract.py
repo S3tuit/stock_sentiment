@@ -6,22 +6,28 @@ from bs4 import BeautifulSoup
 
 from airflow.decorators import dag, task
 from airflow.models import Variable
+from airflow.providers.telegram.operators.telegram import TelegramOperator
 
 from helper.models import Article
 from helper.kafka_produce import make_producer, ProducerCallback
 from helper import schemas
 
+from tickets.tickets import TICKETS
+
 
 
 # Constants for Kafka and API configurations
 TOPIC_NAME = "test.articles"
-API_KEY = Variable.get("SEEK_ALPHA_API_KEY")
+API_KEY = Variable.get("SEEK_ALPHA_API_KEY") + 'test'
 API_HOST = Variable.get("SEEK_ALPHA_API_HOST")
 SCHEMA_REGISTRY_URL = Variable.get("SCHEMA_REGISTRY_URL")
 BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 
+# Parameters for Telegram bot
+chat_id = Variable.get("TELEGRAM_CHAT")
 
-tickets = ['ACMR', 'RIOT']
+# TICKETS is a dict -> {stock_name: exchange}
+tickets = TICKETS.keys()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -96,7 +102,8 @@ def seeking_alpha_extract():
         task_id='process_the_links',
         retries=0,
         retry_delay=timedelta(seconds=5),
-        execution_timeout=timedelta(seconds=30)
+        execution_timeout=timedelta(seconds=30),
+        trigger_rule='all_success'
     )
     def process_links_task(raw_articles):
         """
@@ -148,10 +155,22 @@ def seeking_alpha_extract():
 
         producer.flush()
         logger.info("Kafka producer flushed successfully.")
+        
+        
+    telegram_failure_msg = TelegramOperator(
+        task_id='telegram_failure_msg',
+        telegram_conn_id='telegram_conn',
+        chat_id=chat_id,
+        text='Hi :)',
+        trigger_rule='all_failed'
+    )
 
 
-    articles = get_news_links_task(tickets)
-    process_links_task(articles)
+
+    articles_links = get_news_links_task(tickets)
+    articles_body = process_links_task(articles_links)
+    
+    articles_links >> [articles_body, telegram_failure_msg]
 
 
 seeking_alpha_extract()
