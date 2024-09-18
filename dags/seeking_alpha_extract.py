@@ -18,7 +18,7 @@ from tickets.tickets import TICKETS
 
 # Constants for Kafka and API configurations
 TOPIC_NAME = "test.articles"
-API_KEY = Variable.get("SEEK_ALPHA_API_KEY") + 'test'
+API_KEY = Variable.get("SEEK_ALPHA_API_KEY")
 API_HOST = Variable.get("SEEK_ALPHA_API_HOST")
 SCHEMA_REGISTRY_URL = Variable.get("SCHEMA_REGISTRY_URL")
 BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
@@ -51,7 +51,8 @@ def seeking_alpha_extract():
     @task(
         task_id='get_the_links',
         retries=0,
-        retry_delay=timedelta(seconds=5)
+        retry_delay=timedelta(seconds=5),
+        depends_on_past=True
     )
     def get_news_links_task(tickets, num=1):
         """
@@ -103,7 +104,7 @@ def seeking_alpha_extract():
         retries=0,
         retry_delay=timedelta(seconds=5),
         execution_timeout=timedelta(seconds=30),
-        trigger_rule='all_success'
+        trigger_rule='all_done'
     )
     def process_links_task(raw_articles):
         """
@@ -112,6 +113,12 @@ def seeking_alpha_extract():
         Args:
             raw_articles (list): List of dictionaries containing raw article metadata.
         """
+        
+        # Useful to not mark the task as 'upstream_failed' when the one above fails. That's why trigger_rule='all_done'
+        if not raw_articles:
+            logger.warning("No articles to process.")
+            return
+        
         url = "https://seeking-alpha.p.rapidapi.com/news/get-details"
         headers = {
             "x-rapidapi-key": API_KEY,
@@ -157,20 +164,36 @@ def seeking_alpha_extract():
         logger.info("Kafka producer flushed successfully.")
         
         
-    telegram_failure_msg = TelegramOperator(
-        task_id='telegram_failure_msg',
+    telegram_failure_extract_msg = TelegramOperator(
+        task_id='telegram_failure_extract_msg',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='Hi :)',
+        text='''I couldn't extract the link fron the SeekingAlpha API.
+        
+        The dag that failed is seeking_alpha_extract. The failed task is get_news_links_task.
+        
+        Probably, the API key is changed.''',
+        trigger_rule='all_failed'
+    )
+
+    telegram_failure_process_msg = TelegramOperator(
+        task_id='telegram_failure_process_msg',
+        telegram_conn_id='telegram_conn',
+        chat_id=chat_id,
+        text='''I couldn't get the articles body fron the SeekingAlpha API.
+        
+        The dag that failed is seeking_alpha_extract. The failed task is process_links_task.
+        
+        Idk what happened :(.''',
         trigger_rule='all_failed'
     )
 
 
-
-    articles_links = get_news_links_task(tickets)
-    articles_body = process_links_task(articles_links)
+    get_news_links = get_news_links_task(tickets)
+    process_links = process_links_task(get_news_links)
     
-    articles_links >> [articles_body, telegram_failure_msg]
+    get_news_links >> [process_links, telegram_failure_extract_msg]
+    process_links >> telegram_failure_process_msg
 
 
 seeking_alpha_extract()
