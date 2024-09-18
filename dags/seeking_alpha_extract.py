@@ -6,10 +6,13 @@ from bs4 import BeautifulSoup
 
 from airflow.decorators import dag, task
 from airflow.models import Variable
+from airflow.providers.telegram.operators.telegram import TelegramOperator
 
 from helper.models import Article
 from helper.kafka_produce import make_producer, ProducerCallback
 from helper import schemas
+
+from tickets.tickets import TICKETS
 
 
 
@@ -20,8 +23,11 @@ API_HOST = Variable.get("SEEK_ALPHA_API_HOST")
 SCHEMA_REGISTRY_URL = Variable.get("SCHEMA_REGISTRY_URL")
 BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 
+# Parameters for Telegram bot
+chat_id = Variable.get("TELEGRAM_CHAT")
 
-tickets = ['ACMR', 'RIOT']
+# TICKETS is a dict -> {stock_name: exchange}
+tickets = TICKETS.keys()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -45,7 +51,8 @@ def seeking_alpha_extract():
     @task(
         task_id='get_the_links',
         retries=0,
-        retry_delay=timedelta(seconds=5)
+        retry_delay=timedelta(seconds=5),
+        depends_on_past=True
     )
     def get_news_links_task(tickets, num=1):
         """
@@ -96,7 +103,8 @@ def seeking_alpha_extract():
         task_id='process_the_links',
         retries=0,
         retry_delay=timedelta(seconds=5),
-        execution_timeout=timedelta(seconds=30)
+        execution_timeout=timedelta(seconds=30),
+        trigger_rule='all_done'
     )
     def process_links_task(raw_articles):
         """
@@ -105,6 +113,12 @@ def seeking_alpha_extract():
         Args:
             raw_articles (list): List of dictionaries containing raw article metadata.
         """
+        
+        # Useful to not mark the task as 'upstream_failed' when the one above fails. That's why trigger_rule='all_done'
+        if not raw_articles:
+            logger.warning("No articles to process.")
+            return
+        
         url = "https://seeking-alpha.p.rapidapi.com/news/get-details"
         headers = {
             "x-rapidapi-key": API_KEY,
@@ -148,10 +162,38 @@ def seeking_alpha_extract():
 
         producer.flush()
         logger.info("Kafka producer flushed successfully.")
+        
+        
+    telegram_failure_extract_msg = TelegramOperator(
+        task_id='telegram_failure_extract_msg',
+        telegram_conn_id='telegram_conn',
+        chat_id=chat_id,
+        text='''I couldn't extract the link fron the SeekingAlpha API.
+        
+        The dag that failed is seeking_alpha_extract. The failed task is get_news_links_task.
+        
+        Probably, the API key is changed.''',
+        trigger_rule='all_failed'
+    )
+
+    telegram_failure_process_msg = TelegramOperator(
+        task_id='telegram_failure_process_msg',
+        telegram_conn_id='telegram_conn',
+        chat_id=chat_id,
+        text='''I couldn't get the articles body fron the SeekingAlpha API.
+        
+        The dag that failed is seeking_alpha_extract. The failed task is process_links_task.
+        
+        Idk what happened :(.''',
+        trigger_rule='all_failed'
+    )
 
 
-    articles = get_news_links_task(tickets)
-    process_links_task(articles)
+    get_news_links = get_news_links_task(tickets)
+    process_links = process_links_task(get_news_links)
+    
+    get_news_links >> [process_links, telegram_failure_extract_msg]
+    process_links >> telegram_failure_process_msg
 
 
 seeking_alpha_extract()
