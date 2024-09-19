@@ -1,10 +1,18 @@
 from pydantic import BaseModel
-from datetime import datetime
 from typing import Optional
 
+# Class used for the topic test.articles
 class Article(BaseModel):
     ticket: Optional[str] = None
     url: Optional[str] = None
     title: Optional[str] = None
     article_body: Optional[str] = None
     timestp: Optional[int] = None
+
+# Class used for the topic test.price_info
+class Prices(BaseModel):
+    ticket: str
+    timestp: int    # in unix time
+    price_n_volume: dict    # daily price and volume
+    technicals: dict    # technical analysis, {indicator: value}
+    

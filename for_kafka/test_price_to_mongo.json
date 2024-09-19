@@ -1,10 +1,10 @@
 {
-    "name": "test_articles_to_mongo",
+    "name": "test_price_to_mongo",
     "config": {
         "connection.uri": "mongodb://peppa:peppa@mongodb:27017",
         "database": "stock_test",
-        "collection": "articles_test",
-        "topics": "test.articles",
+        "collection": "price_info",
+        "topics": "test.price_info",
         "connector.class": "com.mongodb.kafka.connect.MongoSinkConnector",
         "tasks.max": 1,
         "key.converter": "org.apache.kafka.connect.storage.StringConverter",
