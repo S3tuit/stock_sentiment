@@ -9,7 +9,7 @@ from airflow.models import Variable
 from airflow.providers.telegram.operators.telegram import TelegramOperator
 
 from helper.models import Article
-from helper.kafka_produce import make_producer, ProducerCallback
+from helper.kafka_produce import make_producer, ArticleProducerCallback
 from helper import schemas
 
 from tickets.tickets import TICKETS
@@ -59,7 +59,7 @@ def seeking_alpha_extract():
         Task to retrieve news links for a specific stock ticker list from the Seeking Alpha API.
         
         Args:
-            ticket (list): A list of stock ticker symbol.
+            tickets (list): A list of stock ticker symbol.
             num (int): The number of articles to fetch.
         
         Returns:
@@ -155,7 +155,7 @@ def seeking_alpha_extract():
                 topic=TOPIC_NAME,
                 key=article.ticket.lower(),
                 value=article,
-                on_delivery=ProducerCallback(article)
+                on_delivery=ArticleProducerCallback(article)
             )
                 
             logger.info(f"Produced article {article.title} to Kafka topic {TOPIC_NAME}.")

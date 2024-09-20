@@ -7,7 +7,7 @@ from airflow.decorators import dag, task
 from airflow.models import Variable
 
 from helper.models import Article
-from helper.kafka_produce import make_producer, ProducerCallback
+from helper.kafka_produce import make_producer, ArticleProducerCallback
 from helper import schemas
 
 # Constants for Kafka and API configurations
@@ -140,7 +140,7 @@ def yahoo_extract():
                         topic=TOPIC_NAME,
                         key=article.ticket.lower(),
                         value=article,
-                        on_delivery=ProducerCallback(article)
+                        on_delivery=ArticleProducerCallback(article)
                     )
                 
                 else:

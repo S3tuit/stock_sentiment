@@ -7,7 +7,7 @@ from airflow.models import Variable
 from airflow.providers.telegram.operators.telegram import TelegramOperator
 
 from helper.models import Article
-from helper.kafka_produce import make_producer, ProducerCallback
+from helper.kafka_produce import make_producer, ArticleProducerCallback
 from helper import schemas
 from helper.bs4_functions import get_soup
 
@@ -141,7 +141,7 @@ def motley_fool_extract():
                         topic=TOPIC_NAME,
                         key=article.ticket.lower(),
                         value=article,
-                        on_delivery=ProducerCallback(article)
+                        on_delivery=ArticleProducerCallback(article)
                     )
                 
                 else:
