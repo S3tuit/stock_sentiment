@@ -83,3 +83,39 @@ prices_schema_v1 = """
 }
 
 """
+
+
+balance_sheet_schema_v1 = """
+
+{
+    "name": "prices_schema_v1",
+    "namespace": "com.prices.schema.v1",
+    "doc": "Schema for the BalanceSheet model. The key is ticket.",
+    "type": "record",
+    "fields": [
+        {
+            "name": "ticket",
+            "type": "string"
+        },
+        {
+            "name": "timestp",
+            "type": "long"
+        },
+        {
+            "name": "earnings_ratios",
+            "type": {
+                "type": "map",
+                "values": "string"
+            }
+        },
+        {
+            "name": "balance_sheet",
+            "type": {
+                "type": "map",
+                "values": "string"
+            }
+        }
+    ]
+}
+
+"""

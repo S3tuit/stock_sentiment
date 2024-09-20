@@ -15,4 +15,9 @@ class Prices(BaseModel):
     timestp: int    # in unix time
     price_n_volume: dict    # daily price and volume
     technicals: dict    # technical analysis, {indicator: value}
-    
+
+class BalanceSheet(BaseModel):
+    ticket: str
+    timestp: int    # in unix time
+    earnings_ratios: dict    # earnings and ratios relative to them (like PS)
+    balance_sheet: dict

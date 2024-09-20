@@ -59,7 +59,7 @@ def seeking_alpha_extract():
         Task to retrieve news links for a specific stock ticker list from the Seeking Alpha API.
         
         Args:
-            ticket (list): A list of stock ticker symbol.
+            tickets (list): A list of stock ticker symbol.
             num (int): The number of articles to fetch.
         
         Returns:
