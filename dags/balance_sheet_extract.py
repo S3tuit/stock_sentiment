@@ -27,7 +27,6 @@ chat_id = Variable.get("TELEGRAM_CHAT")
 
 # TICKETS is a dict -> {stock_name: exchange}
 tickets = list(TICKETS.keys())
-tickets = ['aapl']
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -134,12 +133,13 @@ def balance_sheet_extract():
                 balance_sheet = requests.get(balance_sheet_url).json()
                 # Get the last report
                 balance_sheet = balance_sheet['quarterlyReports'][0]
-                # Keep just the info I'm interested in
-                balance_sheet = {key: balance_sheet.get(key) for key in balance_sheet_useful}
                 
                 # Convert the day of the quarterly report into a datetime.datetime, next it'll become unix time
                 fiscal_date = balance_sheet['fiscalDateEnding']
                 datetime_fiscal_date = datetime.strptime(fiscal_date, "%Y-%m-%d")
+                
+                # Keep just the info I'm interested in
+                balance_sheet = {key: balance_sheet.get(key) for key in balance_sheet_useful}
                 
             except Exception as e:
                 logger.error(e)
