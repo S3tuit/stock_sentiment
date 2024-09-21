@@ -78,22 +78,35 @@ def seeking_alpha_extract():
             response = requests.get(url, headers=headers, params=querystring)
             response.raise_for_status()
             data = response.json()
+            
+            articles_retrived = 0
 
-            # For details about the response visit:
-            # https://rapidapi.com/apidojo/api/seeking-alpha/playground/apiendpoint_26d058f9-bc94-4bf6-b6d7-e405379006b3
-            for row in data['data']:
-                date_str = row['attributes']['publishOn']
-                date_time = datetime.fromisoformat(date_str)
-                unix_timestamp = int(date_time.timestamp())
-
-                articles_to_process.append({
-                    'id': row['id'],
-                    'timestp': unix_timestamp,
-                    'title': row['attributes']['title'],
-                    'ticket': ticket
-                })
+            # try-except is for logging reasons
+            try:
+                # For details about the response visit:
+                # https://rapidapi.com/apidojo/api/seeking-alpha/playground/apiendpoint_26d058f9-bc94-4bf6-b6d7-e405379006b3
                 
-            logger.info(f"Successfully retrieved {len(articles_to_process)} articles for ticker {ticket}.")
+                # For each article in data, get just the info I care about and append them
+                for row in data['data']:
+                    date_str = row['attributes']['publishOn']
+                    date_time = datetime.fromisoformat(date_str)
+                    unix_timestamp = int(date_time.timestamp())
+                    
+                    articles_to_process.append({
+                        'id': row['id'],
+                        'timestp': unix_timestamp,
+                        'title': row['attributes']['title'],
+                        'ticket': ticket
+                    })
+                    
+                    articles_retrived += 1
+                    
+            except Exception as e:
+                logger.error(e)
+                logger.error(f'The data sctructure is: {data}')
+                raise
+                
+            logger.info(f"Successfully retrieved {articles_retrived} articles for ticket {ticket}.")
 
         return articles_to_process
 
@@ -138,16 +151,24 @@ def seeking_alpha_extract():
             response.raise_for_status()
             data = response.json()
 
-            soup = BeautifulSoup(data['data']['attributes']['content'], 'html.parser')
-            article_content = soup.get_text()
+            # For logging
+            try:
+                # This is for extracting just the text, without html elemts like <p>
+                soup = BeautifulSoup(data['data']['attributes']['content'], 'html.parser')
+                article_content = soup.get_text()
 
-            article = Article(
-                ticket=raw_article['ticket'],
-                timestp=raw_article['timestp'],
-                url=data['data']['links']['canonical'],
-                title=raw_article['title'],
-                article_body=article_content
-            )
+                article = Article(
+                    ticket=raw_article['ticket'],
+                    timestp=raw_article['timestp'],
+                    url=data['data']['links']['canonical'],
+                    title=raw_article['title'],
+                    article_body=article_content
+                )
+            
+            except Exception as e:
+                logger.error(e)
+                logger.error(f'The data sctructure is: {data}')
+                raise
                 
             logger.info(f"Processed article: {article.title}")
 

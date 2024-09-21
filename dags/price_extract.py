@@ -105,21 +105,34 @@ def price_extract():
         
         for ticket in tickets:
             
-            # Get the price and volume of the last trading day
-            url_daily_price = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticket}&apikey={API_KEY}'
-            daily_price = requests.get(url_daily_price).json()
-            daily_price = daily_price['Global Quote']
+            # For logging 
+            try:
+                daily_price = 'None'
+                # Get the price and volume of the last trading day
+                url_daily_price = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticket}&apikey={API_KEY}'
+                daily_price = requests.get(url_daily_price).json()
+                daily_price = daily_price['Global Quote']
+                
+                # Convert the last trading day into a datetime.datetime, next it'll become unix time
+                trading_day = daily_price['07. latest trading day']
+                datetime_trading_day = datetime.strptime(trading_day, "%Y-%m-%d")
             
-            # Convert the last trading day into a datetime.datetime, next it'll become unix time
-            trading_day = daily_price['07. latest trading day']
-            datetime_trading_day = datetime.strptime(trading_day, "%Y-%m-%d")
+            except Exception as e:
+                logger.error(e)
+                logger.error(f'The daily price sctructure is: {daily_price}')
+                raise
             
-            
-            # Get technical values of the last trading day and keep just the useful (for this purpose) ones
-            technicals_useful = ['52WeekHigh', '52WeekLow', '50DayMovingAverage', '200DayMovingAverage']
-            url_technicals = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticket}&apikey={API_KEY}'
-            technicals = requests.get(url_technicals).json()
-            technicals = {key: technicals.get(key) for key in technicals_useful}
+            try:
+                technicals = 'None'
+                # Get technical values of the last trading day and keep just the useful (for this purpose) ones
+                technicals_useful = ['52WeekHigh', '52WeekLow', '50DayMovingAverage', '200DayMovingAverage']
+                url_technicals = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticket}&apikey={API_KEY}'
+                technicals = requests.get(url_technicals).json()
+                technicals = {key: technicals.get(key) for key in technicals_useful}
+            except Exception as e:
+                logger.error(e)
+                logger.error(f'The technicals sctructure is: {technicals}')
+                raise
             
             logger.info(f"Successfully retrived info for: {ticket}")
             
