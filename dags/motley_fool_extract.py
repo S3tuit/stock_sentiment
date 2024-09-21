@@ -132,6 +132,7 @@ def motley_fool_extract():
         # Even if an article fails, try-except-finally will produce all the successful messages to Kafka
         soup = 'None'
         errors = 0
+        headers = wait_and_rotate_agent(wait_time=0)
         try:
             for basic_article in article_basic_info:
             
@@ -147,8 +148,8 @@ def motley_fool_extract():
                     
                     if article_text:
                         article = Article(
-                            ticket=basic_article['ticket'],
-                            url=basic_article['url'],
+                            ticket=basic_article['ticket'].lower(),
+                            url='https://www.fool.com/' + basic_article['url'],
                             title= basic_article['title'],
                             article_body= article_text,
                             timestp=int(datetime.now().timestamp())
