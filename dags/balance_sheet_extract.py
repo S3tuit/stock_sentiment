@@ -51,6 +51,7 @@ def balance_sheet_extract():
         task_id='is_api_available',
         retries=1,
         retry_delay=timedelta(seconds=10),
+        execution_timeout=timedelta(seconds=30),
         depends_on_past=True
     )
     def is_api_available_task(ticket):
@@ -81,7 +82,6 @@ def balance_sheet_extract():
         task_id='balance_sheet_extract',
         retries=0,
         retry_delay=timedelta(seconds=5),
-        execution_timeout=timedelta(seconds=30),
         trigger_rule='all_done'
     )
     def balance_sheet_extract_task(tickets):
@@ -103,11 +103,14 @@ def balance_sheet_extract():
         )
         logger.info("Kafka producer created successfully.")
         
-        for ticket in tickets:
-            
-            # try-except is for logging reasons
-            try:
-                earnings='None'
+        # try-except is for logging reasons and to flush the successful messages even if there's an error
+        try:
+            for ticket in tickets:
+                
+                earnings = 'None'
+                balance_sheet = 'None'
+                balance_sheet_model = 'None'
+                
                 # Get the earnings and ratios
                 earnings_useful = ['MarketCapitalization', 'DilutedEPSTTM', 'PERatio', 'ForwardPE', 'EPS', 'RevenueTTM', 'QuarterlyRevenueGrowthYOY',
                                 'ProfitMargin', 'OperatingMarginTTM', 'Beta', 'PriceToSalesRatioTTM', 'PriceToBookRatio']
@@ -116,15 +119,7 @@ def balance_sheet_extract():
                 # Keep just the info I'm interested in
                 earnings = {key: earnings.get(key) for key in earnings_useful}
                 
-            except Exception as e:
-                logger.error(e)
-                logger.error(f'The earnings sctructure is: {earnings}')
-                raise
-            
-            
-            # try-except is for logging reasons
-            try:
-                balance_sheet = 'None'
+                
                 # Get the balance_sheet
                 balance_sheet_useful = ['totalAssets', 'cashAndCashEquivalentsAtCarryingValue', 'totalLiabilities', 'totalShareholderEquity',
                                         'retainedEarnings', 'cashAndShortTermInvestments', 'propertyPlantEquipment', 'commonStockSharesOutstanding',
@@ -133,43 +128,45 @@ def balance_sheet_extract():
                 balance_sheet = requests.get(balance_sheet_url).json()
                 # Get the last report
                 balance_sheet = balance_sheet['quarterlyReports'][0]
-                
+                    
                 # Convert the day of the quarterly report into a datetime.datetime, next it'll become unix time
                 fiscal_date = balance_sheet['fiscalDateEnding']
                 datetime_fiscal_date = datetime.strptime(fiscal_date, "%Y-%m-%d")
-                
+                    
                 # Keep just the info I'm interested in
-                balance_sheet = {key: balance_sheet.get(key) for key in balance_sheet_useful}
+                balance_sheet = {key: balance_sheet.get(key) for key in balance_sheet_useful}                
                 
-            except Exception as e:
-                logger.error(e)
-                logger.error(f'The balance_sheet sctructure is: {balance_sheet}')
-                raise
+                logger.info(f"Successfully retrived info for: {ticket}")
+                
+                
+                balance_sheet_model = BalanceSheet(
+                    ticket=ticket.lower(),
+                    timestp=int(datetime_fiscal_date.timestamp()),
+                    earnings_ratios=earnings,
+                    balance_sheet=balance_sheet
+                )
             
-            
-            logger.info(f"Successfully retrived info for: {ticket}")
-            
-            
-            balance_sheet_model = BalanceSheet(
-                ticket=ticket.lower(),
-                timestp=int(datetime_fiscal_date.timestamp()),
-                earnings_ratios=earnings,
-                balance_sheet=balance_sheet
-            )
-        
-            logger.info(f"Successfully processed balance_sheet for: {ticket}")
+                logger.info(f"Successfully processed balance_sheet for: {ticket}")
 
-            producer.produce(
-                topic=TOPIC_NAME,
-                key=balance_sheet_model.ticket,
-                value=balance_sheet_model,
-                on_delivery=GenralProducerCallback(balance_sheet_model)
-            )
+                producer.produce(
+                    topic=TOPIC_NAME,
+                    key=balance_sheet_model.ticket,
+                    value=balance_sheet_model,
+                    on_delivery=GenralProducerCallback(balance_sheet_model)
+                )
+                    
+                logger.info(f"Produced {ticket}'s balance sheet report to Kafka topic {TOPIC_NAME}.")
                 
-            logger.info(f"Produced {ticket}'s balance sheet report to Kafka topic {TOPIC_NAME}.")
+                # This will reduce the strain on the free service (tnx)
+                sleep(5)
+        except Exception as e:
+            logger.error(e)
+            logger.error(f'The earnings sctructure is: {earnings}')
+            logger.error(f'The balance_sheet sctructure is: {balance_sheet}')
+            logger.error(f'The balance_sheet MODEL sctructure is: {balance_sheet_model}')
             
-            # This will reduce the strain on the free service (tnx)
-            sleep(1)
+            producer.flush()
+            raise
 
         producer.flush()
         logger.info("Kafka producer flushed successfully.")

@@ -51,6 +51,7 @@ def price_extract():
         task_id='is_api_available',
         retries=1,
         retry_delay=timedelta(seconds=10),
+        execution_timeout=timedelta(seconds=30),
         depends_on_past=True
     )
     def is_api_available_task(ticket):
@@ -81,7 +82,6 @@ def price_extract():
         task_id='get_the_prices',
         retries=0,
         retry_delay=timedelta(seconds=5),
-        execution_timeout=timedelta(seconds=30),
         trigger_rule='all_done'
     )
     def get_the_prices_task(tickets):

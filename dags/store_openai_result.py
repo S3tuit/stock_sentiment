@@ -2,11 +2,11 @@
 from datetime import datetime, timedelta
 import requests
 import logging
-from bs4 import BeautifulSoup
 
 from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.providers.telegram.operators.telegram import TelegramOperator
+from airflow.providers.mongo.hooks.mongo import MongoHook
 
 from helper.models import Article
 from helper.kafka_produce import make_producer, ArticleProducerCallback
@@ -17,9 +17,7 @@ from tickets.tickets import TICKETS
 
 
 # Constants for Kafka and API configurations
-TOPIC_NAME = "test.articles"
-API_KEY = Variable.get("SEEK_ALPHA_API_KEY")
-API_HOST = Variable.get("SEEK_ALPHA_API_HOST")
+TOPIC_NAME = "test.openai_sentiment"
 SCHEMA_REGISTRY_URL = Variable.get("SCHEMA_REGISTRY_URL")
 BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 
@@ -27,7 +25,7 @@ BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 chat_id = Variable.get("TELEGRAM_CHAT")
 
 # TICKETS is a dict -> {stock_name: exchange}
-tickets = TICKETS.keys()
+tickets = list(TICKETS.keys())[0] # for testing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,18 +41,17 @@ logger = logging.getLogger(__name__)
 )
 def seeking_alpha_extract():
     """
-    DAG to extract article data from the Seeking Alpha API, process the data,
-    and produce it to a Kafka topic.
+    DAG to make a call to openai and get the stock sentiment + prediction, produce them to Kafka e save to MongoDB.
     """
 
 
     @task(
-        task_id='get_the_links',
+        task_id='prepare_the_info',
         retries=0,
         retry_delay=timedelta(seconds=5),
         depends_on_past=True
     )
-    def get_news_links_task(tickets, num=1):
+    def prepare_the_info_task(tickets, num=1):
         """
         Task to retrieve news links for a specific stock ticker list from the Seeking Alpha API.
         
@@ -65,6 +62,7 @@ def seeking_alpha_extract():
         Returns:
             list: A list of dictionaries containing article metadata.
         """
+        mongo_hook = MongoHook(conn_id='mongo_test')
         url = "https://seeking-alpha.p.rapidapi.com/news/v2/list-by-symbol"
         articles_to_process = []
         headers = {
@@ -111,78 +109,6 @@ def seeking_alpha_extract():
         return articles_to_process
 
 
-
-    @task(
-        task_id='process_the_links',
-        retries=0,
-        retry_delay=timedelta(seconds=5),
-        trigger_rule='all_done'
-    )
-    def process_links_task(raw_articles):
-        """
-        Task to process raw article data, extract content, and produce it to a Kafka topic.
-        
-        Args:
-            raw_articles (list): List of dictionaries containing raw article metadata.
-        """
-        
-        # Useful to not mark the task as 'upstream_failed' when the one above fails. That's why trigger_rule='all_done'
-        if not raw_articles:
-            logger.warning("No articles to process.")
-            return
-        
-        url = "https://seeking-alpha.p.rapidapi.com/news/get-details"
-        headers = {
-            "x-rapidapi-key": API_KEY,
-            "x-rapidapi-host": API_HOST
-        }
-
-        producer = make_producer(
-            schema_reg_url=SCHEMA_REGISTRY_URL,
-            bootstrap_server=BOOTSTRAP_SERVERS,
-            schema=schemas.article_schema_v1
-        )
-        logger.info("Kafka producer created successfully.")
-
-        for raw_article in raw_articles:
-            querystring = {"id": raw_article['id']}
-            response = requests.get(url, headers=headers, params=querystring)
-            response.raise_for_status()
-            data = response.json()
-
-            # For logging
-            try:
-                # This is for extracting just the text, without html elemts like <p>
-                soup = BeautifulSoup(data['data']['attributes']['content'], 'html.parser')
-                article_content = soup.get_text()
-
-                article = Article(
-                    ticket=raw_article['ticket'],
-                    timestp=raw_article['timestp'],
-                    url=data['data']['links']['canonical'],
-                    title=raw_article['title'],
-                    article_body=article_content
-                )
-            
-            except Exception as e:
-                logger.error(e)
-                logger.error(f'The data sctructure is: {data}')
-                raise
-                
-            logger.info(f"Processed article: {article.title}")
-
-            producer.produce(
-                topic=TOPIC_NAME,
-                key=article.ticket.lower(),
-                value=article,
-                on_delivery=ArticleProducerCallback(article)
-            )
-                
-            logger.info(f"Produced article {article.title} to Kafka topic {TOPIC_NAME}.")
-
-        producer.flush()
-        logger.info("Kafka producer flushed successfully.")
-        
         
     telegram_failure_extract_msg = TelegramOperator(
         task_id='telegram_failure_extract_msg',
