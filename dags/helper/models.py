@@ -21,3 +21,9 @@ class BalanceSheet(BaseModel):
     timestp: int    # in unix time
     earnings_ratios: dict    # earnings and ratios relative to them (like PS)
     balance_sheet: dict
+
+# Used to retrieve structured result with openai API
+class StockSentiment(BaseModel):
+    score: int
+    reasoning: str
+    ticket: str

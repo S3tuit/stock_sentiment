@@ -157,7 +157,7 @@ def seeking_alpha_extract():
                 article_content = soup.get_text()
 
                 article = Article(
-                    ticket=raw_article['ticket'],
+                    ticket=raw_article['ticket'].lower(),
                     timestp=raw_article['timestp'],
                     url=data['data']['links']['canonical'],
                     title=raw_article['title'],

@@ -1,6 +1,5 @@
 
 from datetime import datetime, timedelta
-import requests
 import logging
 
 from airflow.decorators import dag, task
@@ -8,9 +7,10 @@ from airflow.models import Variable
 from airflow.providers.telegram.operators.telegram import TelegramOperator
 from airflow.providers.mongo.hooks.mongo import MongoHook
 
-from helper.models import Article
-from helper.kafka_produce import make_producer, ArticleProducerCallback
+from helper.models import StockSentiment
+from helper.kafka_produce import make_producer, GenralProducerCallback
 from helper import schemas
+from helper.for_openai_api import get_info_from_mongo, get_sentiment
 
 from tickets.tickets import TICKETS
 
@@ -32,6 +32,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+mongo_hook = MongoHook(conn_id='mongo_test')
+    
+producer = make_producer(
+    schema_reg_url=SCHEMA_REGISTRY_URL,
+    bootstrap_server=BOOTSTRAP_SERVERS,
+    schema=schemas.balance_sheet_schema_v1
+)
+
 
 @dag(
     schedule=None,
@@ -39,107 +47,79 @@ logger = logging.getLogger(__name__)
     catchup=False,
     tags=["stock_sentiment"]
 )
-def seeking_alpha_extract():
+def stock_sentiment_analysis():
     """
     DAG to make a call to openai and get the stock sentiment + prediction, produce them to Kafka e save to MongoDB.
     """
 
-
     @task(
-        task_id='prepare_the_info',
+        task_id='process_ticket',
         retries=0,
         retry_delay=timedelta(seconds=5),
         depends_on_past=True
     )
-    def prepare_the_info_task(tickets, num=1):
+    def process_ticket_task(ticket):
         """
-        Task to retrieve news links for a specific stock ticker list from the Seeking Alpha API.
+        This retrives info about a stock ticket (sentiment, prices, balance sheet) and send it to
+        openai for an analysis. The result is produces to kafka
         
         Args:
-            tickets (list): A list of stock ticker symbol.
-            num (int): The number of articles to fetch.
-        
-        Returns:
-            list: A list of dictionaries containing article metadata.
+            ticket (str): A of stock ticker symbol.
+            producer (SerializingProducer): Producer to send messages to Kafka.
+            mongo_hook (MongoHook): Hook to access Mongo db 
         """
-        mongo_hook = MongoHook(conn_id='mongo_test')
-        url = "https://seeking-alpha.p.rapidapi.com/news/v2/list-by-symbol"
-        articles_to_process = []
-        headers = {
-            "x-rapidapi-key": API_KEY,
-            "x-rapidapi-host": API_HOST
-        }
-
-        for ticket in tickets:
-            querystring = {"size": num, "number": "1", "id": ticket}
+        
+        # Retrives the data needed
+        articles = get_info_from_mongo(collection='articles_test', ticket=ticket, limit=3, mongo_hook=mongo_hook)
+        logger.info(f'Successfully retrived articles data for {ticket}')
+        
+        prices = get_info_from_mongo(collection='price_info', ticket=ticket, limit=1, mongo_hook=mongo_hook)
+        logger.info(f'Successfully retrived prices data for {ticket}')
+        
+        balance_sheet = get_info_from_mongo(collection='balance_sheet', ticket=ticket, limit=1, mongo_hook=mongo_hook)
+        logger.info(f'Successfully retrived balance_sheet data for {ticket}')
+        
+        # Create OpenAI message
+        openai_message = f'''
+        Below, you'll find articles, daily price, and the balance sheet about the stock {ticket}. 
+        Analyze them and give a score to the stock sentiment from 1 to 100.
+        Write a comprehensive reasoning explaining the score.
+        
+        Articles: {articles}
+        Prices: {prices}
+        Balance sheet: {balance_sheet}
+        '''
+        
+        sentiment = get_sentiment(openai_message=openai_message, format=StockSentiment)
+        sentiment.ticket = ticket.lower()
+        logger.info(f'Successfully retrived sentiment data for {ticket}')
             
-            response = requests.get(url, headers=headers, params=querystring)
-            response.raise_for_status()
-            data = response.json()
-            
-            articles_retrived = 0
-
-            # try-except is for logging reasons
-            try:
-                # For details about the response visit:
-                # https://rapidapi.com/apidojo/api/seeking-alpha/playground/apiendpoint_26d058f9-bc94-4bf6-b6d7-e405379006b3
-                
-                # For each article in data, get just the info I care about and append them
-                for row in data['data']:
-                    date_str = row['attributes']['publishOn']
-                    date_time = datetime.fromisoformat(date_str)
-                    unix_timestamp = int(date_time.timestamp())
-                    
-                    articles_to_process.append({
-                        'id': row['id'],
-                        'timestp': unix_timestamp,
-                        'title': row['attributes']['title'],
-                        'ticket': ticket
-                    })
-                    
-                    articles_retrived += 1
-                    
-            except Exception as e:
-                logger.error(e)
-                logger.error(f'The data sctructure is: {data}')
-                raise
-                
-            logger.info(f"Successfully retrieved {articles_retrived} articles for ticket {ticket}.")
-
-        return articles_to_process
-
+        producer.produce(
+            topic=TOPIC_NAME,
+            key=ticket.lower(),
+            value=sentiment,
+            on_delivery=GenralProducerCallback(sentiment)
+        )
+        logger.info(f'Successfully produced message to Kafka for {ticket}')
 
         
-    telegram_failure_extract_msg = TelegramOperator(
-        task_id='telegram_failure_extract_msg',
+    telegram_failure_msg = TelegramOperator(
+        task_id='telegram_failure_msg',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''I couldn't extract the link fron the SeekingAlpha API.
+        text='''Hey there, looks like I ran into some trouble getting sentiment data for all the tickets.
         
-        The dag that failed is seeking_alpha_extract. The failed task is get_news_links_task.
-        
-        Probably, the API key is changed.''',
+        Something didn’t go as planned.''',
         trigger_rule='all_failed'
     )
-
-    telegram_failure_process_msg = TelegramOperator(
-        task_id='telegram_failure_process_msg',
-        telegram_conn_id='telegram_conn',
-        chat_id=chat_id,
-        text='''I couldn't get the articles body fron the SeekingAlpha API.
-        
-        The dag that failed is seeking_alpha_extract. The failed task is process_links_task.
-        
-        Idk what happened :(.''',
-        trigger_rule='all_failed'
-    )
-
-
-    get_news_links = get_news_links_task(tickets)
-    process_links = process_links_task(get_news_links)
     
-    get_news_links >> [process_links, telegram_failure_extract_msg]
-    process_links >> telegram_failure_process_msg
 
 
-seeking_alpha_extract()
+    process_ticket= process_ticket_task.expand(ticket=tickets)
+    
+    process_ticket >> telegram_failure_msg
+    
+    producer.flush()
+
+
+stock_sentiment_analysis()

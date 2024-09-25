@@ -138,7 +138,7 @@ def price_extract():
             
             
             price = Prices(
-                ticket=ticket,
+                ticket=ticket.lower(),
                 timestp=int(datetime_trading_day.timestamp()),
                 price_n_volume=daily_price,
                 technicals=technicals
