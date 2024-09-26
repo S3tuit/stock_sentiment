@@ -51,8 +51,7 @@ def seeking_alpha_extract():
     @task(
         task_id='get_the_links',
         retries=0,
-        retry_delay=timedelta(seconds=5),
-        depends_on_past=True
+        retry_delay=timedelta(seconds=5)
     )
     def get_news_links_task(tickets, num=1):
         """

@@ -25,20 +25,23 @@ BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 chat_id = Variable.get("TELEGRAM_CHAT")
 
 # TICKETS is a dict -> {stock_name: exchange}
-tickets = list(TICKETS.keys())[0] # for testing
+tickets = list(TICKETS.keys())[:1] # for testing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# For openai API
+OPENAI_API_KEY = Variable.get("OPENAI_API_KEY")
+
 
 mongo_hook = MongoHook(conn_id='mongo_test')
     
-producer = make_producer(
-    schema_reg_url=SCHEMA_REGISTRY_URL,
-    bootstrap_server=BOOTSTRAP_SERVERS,
-    schema=schemas.balance_sheet_schema_v1
-)
+# producer = make_producer(
+#     schema_reg_url=SCHEMA_REGISTRY_URL,
+#     bootstrap_server=BOOTSTRAP_SERVERS,
+#     schema=schemas.balance_sheet_schema_v1
+# )
 
 
 @dag(
@@ -47,7 +50,7 @@ producer = make_producer(
     catchup=False,
     tags=["stock_sentiment"]
 )
-def stock_sentiment_analysis():
+def store_openai_result():
     """
     DAG to make a call to openai and get the stock sentiment + prediction, produce them to Kafka e save to MongoDB.
     """
@@ -55,8 +58,7 @@ def stock_sentiment_analysis():
     @task(
         task_id='process_ticket',
         retries=0,
-        retry_delay=timedelta(seconds=5),
-        depends_on_past=True
+        retry_delay=timedelta(seconds=5)
     )
     def process_ticket_task(ticket):
         """
@@ -68,16 +70,31 @@ def stock_sentiment_analysis():
             producer (SerializingProducer): Producer to send messages to Kafka.
             mongo_hook (MongoHook): Hook to access Mongo db 
         """
-        
+        print('Something')
         # Retrives the data needed
-        articles = get_info_from_mongo(collection='articles_test', ticket=ticket, limit=3, mongo_hook=mongo_hook)
+        articles = get_info_from_mongo(collection='articles_test', ticket=ticket.lower(), limit=3, mongo_hook=mongo_hook)
         logger.info(f'Successfully retrived articles data for {ticket}')
         
-        prices = get_info_from_mongo(collection='price_info', ticket=ticket, limit=1, mongo_hook=mongo_hook)
+        prices = get_info_from_mongo(collection='price_info', ticket=ticket.lower(), limit=1, mongo_hook=mongo_hook)
         logger.info(f'Successfully retrived prices data for {ticket}')
         
-        balance_sheet = get_info_from_mongo(collection='balance_sheet', ticket=ticket, limit=1, mongo_hook=mongo_hook)
+        balance_sheet = get_info_from_mongo(collection='balance_sheet', ticket=ticket.lower(), limit=1, mongo_hook=mongo_hook)
         logger.info(f'Successfully retrived balance_sheet data for {ticket}')
+        
+        
+        # Extract the body of the articles
+        article_bodies = ''
+        for article in articles:
+            article_bodies += article['article_body'] + '\n'
+            
+        # Extract the useful info from prices
+        price_n_volume = prices[0]['price_n_volume']
+        technicals = prices[0]['technicals']
+        
+        # Extract the useful info from the balance sheet
+        earnings_ratios = balance_sheet[0]['earnings_ratios']
+        balance_sheet = balance_sheet[0]['balance_sheet']
+        
         
         # Create OpenAI message
         openai_message = f'''
@@ -85,22 +102,25 @@ def stock_sentiment_analysis():
         Analyze them and give a score to the stock sentiment from 1 to 100.
         Write a comprehensive reasoning explaining the score.
         
-        Articles: {articles}
-        Prices: {prices}
+        Articles: {article_bodies}
+        Prices: {price_n_volume}
+        Technicals: {technicals}
+        Ratios: {earnings_ratios}
         Balance sheet: {balance_sheet}
         '''
+        print(openai_message)
         
-        sentiment = get_sentiment(openai_message=openai_message, format=StockSentiment)
-        sentiment.ticket = ticket.lower()
-        logger.info(f'Successfully retrived sentiment data for {ticket}')
+        # sentiment = get_sentiment(openai_message=openai_message, format=StockSentiment, api_key=OPENAI_API_KEY)
+        # sentiment.ticket = ticket.lower()
+        # logger.info(f'Successfully retrived sentiment data for {ticket}')
             
-        producer.produce(
-            topic=TOPIC_NAME,
-            key=ticket.lower(),
-            value=sentiment,
-            on_delivery=GenralProducerCallback(sentiment)
-        )
-        logger.info(f'Successfully produced message to Kafka for {ticket}')
+        # producer.produce(
+        #     topic=TOPIC_NAME,
+        #     key=ticket.lower(),
+        #     value=sentiment,
+        #     on_delivery=GenralProducerCallback(sentiment)
+        # )
+        # logger.info(f'Successfully produced message to Kafka for {ticket}')
 
         
     telegram_failure_msg = TelegramOperator(
@@ -119,7 +139,6 @@ def stock_sentiment_analysis():
     
     process_ticket >> telegram_failure_msg
     
-    producer.flush()
 
 
-stock_sentiment_analysis()
+store_openai_result()
