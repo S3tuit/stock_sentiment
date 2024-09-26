@@ -51,8 +51,7 @@ def seeking_alpha_extract():
     @task(
         task_id='get_the_links',
         retries=0,
-        retry_delay=timedelta(seconds=5),
-        depends_on_past=True
+        retry_delay=timedelta(seconds=5)
     )
     def get_news_links_task(tickets, num=1):
         """
@@ -116,7 +115,6 @@ def seeking_alpha_extract():
         task_id='process_the_links',
         retries=0,
         retry_delay=timedelta(seconds=5),
-        execution_timeout=timedelta(seconds=30),
         trigger_rule='all_done'
     )
     def process_links_task(raw_articles):
@@ -158,7 +156,7 @@ def seeking_alpha_extract():
                 article_content = soup.get_text()
 
                 article = Article(
-                    ticket=raw_article['ticket'],
+                    ticket=raw_article['ticket'].lower(),
                     timestp=raw_article['timestp'],
                     url=data['data']['links']['canonical'],
                     title=raw_article['title'],
