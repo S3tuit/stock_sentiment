@@ -24,6 +24,8 @@ class BalanceSheet(BaseModel):
 
 # Used to retrieve structured result with openai API
 class StockSentiment(BaseModel):
-    score: int
+    next_month_prediction: float
+    next_year_prediction: float
     reasoning: str
     ticket: str
+    timestp: int
