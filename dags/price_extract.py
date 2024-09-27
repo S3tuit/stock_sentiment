@@ -148,7 +148,7 @@ def price_extract():
 
             producer.produce(
                 topic=TOPIC_NAME,
-                key=price.ticket.lower(),
+                key=price.ticket,
                 value=price,
                 on_delivery=GenralProducerCallback(price)
             )

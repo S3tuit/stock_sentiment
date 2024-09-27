@@ -15,7 +15,6 @@ from helper.for_openai_api import get_info_from_mongo, get_sentiment
 from tickets.tickets import TICKETS
 
 
-
 # Constants for Kafka and API configurations
 TOPIC_NAME = "test.openai_sentiment"
 SCHEMA_REGISTRY_URL = Variable.get("SCHEMA_REGISTRY_URL")
@@ -25,7 +24,7 @@ BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 chat_id = Variable.get("TELEGRAM_CHAT")
 
 # TICKETS is a dict -> {stock_name: exchange}
-tickets = list(TICKETS.keys())[:1] # for testing
+tickets = list(TICKETS.keys())
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,15 +32,6 @@ logger = logging.getLogger(__name__)
 
 # For openai API
 OPENAI_API_KEY = Variable.get("OPENAI_API_KEY")
-
-
-mongo_hook = MongoHook(conn_id='mongo_test')
-    
-# producer = make_producer(
-#     schema_reg_url=SCHEMA_REGISTRY_URL,
-#     bootstrap_server=BOOTSTRAP_SERVERS,
-#     schema=schemas.balance_sheet_schema_v1
-# )
 
 
 @dag(
@@ -70,7 +60,15 @@ def store_openai_result():
             producer (SerializingProducer): Producer to send messages to Kafka.
             mongo_hook (MongoHook): Hook to access Mongo db 
         """
-        print('Something')
+        mongo_hook = MongoHook(conn_id='mongo_test')
+            
+        producer = make_producer(
+            schema_reg_url=SCHEMA_REGISTRY_URL,
+            bootstrap_server=BOOTSTRAP_SERVERS,
+            schema=schemas.stock_sentiment_schema_v1
+        )
+        
+
         # Retrives the data needed
         articles = get_info_from_mongo(collection='articles_test', ticket=ticket.lower(), limit=3, mongo_hook=mongo_hook)
         logger.info(f'Successfully retrived articles data for {ticket}')
@@ -99,7 +97,7 @@ def store_openai_result():
         # Create OpenAI message
         openai_message = f'''
         Below, you'll find articles, daily price, and the balance sheet about the stock {ticket}. 
-        Analyze them and give a score to the stock sentiment from 1 to 100.
+        Analyze them and make a price prediction for the next month and next year.
         Write a comprehensive reasoning explaining the score.
         
         Articles: {article_bodies}
@@ -108,19 +106,20 @@ def store_openai_result():
         Ratios: {earnings_ratios}
         Balance sheet: {balance_sheet}
         '''
-        print(openai_message)
         
-        # sentiment = get_sentiment(openai_message=openai_message, format=StockSentiment, api_key=OPENAI_API_KEY)
-        # sentiment.ticket = ticket.lower()
-        # logger.info(f'Successfully retrived sentiment data for {ticket}')
+        sentiment = get_sentiment(openai_message=openai_message, api_key=OPENAI_API_KEY, ticket=ticket, logger=logger)
+        logger.info(f'Successfully retrived sentiment data for {ticket}')
             
-        # producer.produce(
-        #     topic=TOPIC_NAME,
-        #     key=ticket.lower(),
-        #     value=sentiment,
-        #     on_delivery=GenralProducerCallback(sentiment)
-        # )
-        # logger.info(f'Successfully produced message to Kafka for {ticket}')
+        producer.produce(
+            topic=TOPIC_NAME,
+            key=ticket.lower(),
+            value=sentiment,
+            on_delivery=GenralProducerCallback(sentiment)
+        )
+        
+        logger.info(f'Successfully produced message to Kafka for {ticket}')
+        producer.flush()
+        logger.info(f'Successfully flushed message to Kafka for {ticket}')
 
         
     telegram_failure_msg = TelegramOperator(
@@ -135,7 +134,7 @@ def store_openai_result():
     
 
 
-    process_ticket= process_ticket_task.expand(ticket=tickets)
+    process_ticket = process_ticket_task.expand(ticket=tickets)
     
     process_ticket >> telegram_failure_msg
     

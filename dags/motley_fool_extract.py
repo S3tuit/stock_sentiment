@@ -157,7 +157,7 @@ def motley_fool_extract():
                         
                         producer.produce(
                             topic=TOPIC_NAME,
-                            key=article.ticket.lower(),
+                            key=article.ticket,
                             value=article,
                             on_delivery=ArticleProducerCallback(article)
                         )

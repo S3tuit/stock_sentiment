@@ -96,3 +96,29 @@ db.price_info.createIndex(
    { unique: true, name: "price_test_ticket_tmstp" }
 );
 ```
+
+## collection: stock_sentiment
+This database stores the stock sentiment/prediction got using openai API. Usually, this is the structure of the data:
+```json
+{
+    "ticket": "test",
+    "timestp": Long(1719705600),
+    "next_month_prediction": 5,
+    "next_year_prediction": 5,
+    "reasoning": "This is why..."
+    }
+  }
+```
+
+**Indexes:**
+
+- Unique index (ticket, timestp). Usefull to ensure Mongo won't store the same prediction twice. Usefull also for queries.
+
+```bash
+use stock_test;
+
+db.stock_sentiment.createIndex(
+   { ticket: 1, timestp: -1 },
+   { unique: true, name: "sentiment_test_ticket_tmstp" }
+);
+```

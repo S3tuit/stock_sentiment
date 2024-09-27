@@ -119,3 +119,43 @@ balance_sheet_schema_v1 = """
 }
 
 """
+
+
+stock_sentiment_schema_v1 = """
+
+{
+	"type": "record",
+	"name": "StockSentiment",
+	"namespace": "com.sentiment.schema.v1",
+	"doc": "Schema for the StockSentiment model. The key is the stock ticker (ticket).",
+	"fields": [
+		{
+			"name": "next_month_prediction",
+			"type": "float",
+			"doc": "Prediction for the stock's performance next month."
+		},
+		{
+			"name": "next_year_prediction",
+			"type": "float",
+			"doc": "Prediction for the stock's performance next year."
+		},
+		{
+			"name": "reasoning",
+			"type": "string",
+			"doc": "Detailed reasoning behind the stock sentiment and predictions."
+		},
+		{
+			"name": "ticket",
+			"type": "string",
+			"doc": "Stock ticker symbol."
+		},
+		{
+			"name": "timestp",
+			"type": "long",
+			"doc": "Unix timestamp for when the sentiment was generated",
+			"default": 0
+		}
+	]
+}
+
+"""
