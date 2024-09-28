@@ -1,3 +1,7 @@
+# TESTING
+
+Where you see "stock ticket" instead of "stock ticker", that's a test.
+
 # START DOCKER
 
 Run:
