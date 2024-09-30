@@ -1,48 +1,37 @@
-article_schema_v1 = """
+article_schema_v2 = """
 
 {
-    "name": "article_schema_v1",
-    "namespace": "com.article.schema.v1",
-    "doc": "The key is TICKET. The first version of my schema for the extracted articles.",
-    "type": "record",
-    "fields": [
-        {
-            "name": "ticket",
-            "type": "string"
-        },
-        {
-            "name": "url",
-            "type": [
-                "null",
-                "string"
-            ],
-            "default": null
-        },
-        {
-            "name": "title",
-            "type": [
-                "null",
-                "string"
-            ],
-            "default": null
-        },
-        {
-            "name": "article_body",
-            "type": [
-                "null",
-                "string"
-            ],
-            "default": null
-        },
-        {
-            "name": "timestp",
-            "type": [
-                "null",
-                "long"
-            ],
-            "default": null
-        }
-    ]
+	"type": "record",
+	"name": "article_schema_v2",
+	"namespace": "com.article.schema.v2",
+	"doc": "The key is TICKET. The first version of my schema for the extracted articles.",
+	"fields": [
+		{
+			"name": "ticket",
+			"type": "string"
+		},
+		{
+			"name": "url",
+			"type": "string"
+		},
+		{
+			"name": "title",
+			"type": "string"
+		},
+		{
+			"name": "article_body",
+			"type": "string"
+		},
+		{
+			"name": "timestp",
+			"type": "long"
+		},
+		{
+			"name": "source",
+			"type": "string",
+			"default": "seeking_alpha"
+		}
+	]
 }
 
 """

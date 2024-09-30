@@ -3,11 +3,12 @@ from typing import Optional
 
 # Class used for the topic test.articles
 class Article(BaseModel):
-    ticket: Optional[str] = None
-    url: Optional[str] = None
-    title: Optional[str] = None
-    article_body: Optional[str] = None
-    timestp: Optional[int] = None
+    ticket: str
+    url: str
+    title: str
+    article_body: str
+    timestp: int
+    source: str
 
 # Class used for the topic test.price_info
 class Prices(BaseModel):
