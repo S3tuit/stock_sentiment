@@ -46,8 +46,12 @@ logger = logging.getLogger(__name__)
 )
 def seeking_alpha_extract():
     """
-    DAG to extract article data from the Seeking Alpha API, process the data,
-    and produce it to a Kafka topic.
+    This DAG performs the following steps:
+    1. Retrieves article links for stock from the Seeking Alpha API.
+    2. Compares article titles with cached data to check for duplicates.
+    3. Fetches article bodies and processes them if they are new.
+    4. Produces the articles to a Kafka topic.
+    5. Sends Telegram notifications on failure events.
     """
 
 
@@ -58,14 +62,14 @@ def seeking_alpha_extract():
     )
     def get_news_links_task(tickets, num=1):
         """
-        Task to retrieve news links for a specific stock ticker list from the Seeking Alpha API.
-        
+        Fetches article links for a list of stock tickers from the Seeking Alpha API.
+
         Args:
-            tickets (list): A list of stock ticker symbol.
-            num (int): The number of articles to fetch.
+            tickets (list): A list of stock ticker symbols.
+            num (int): The number of articles to fetch per ticker.
         
         Returns:
-            list: A list of dictionaries containing article metadata; id, date of the article, title, and ticket.
+            list: A list of article metadata, including id, timestamp, title, and ticker.
         """
         url = "https://seeking-alpha.p.rapidapi.com/news/v2/list-by-symbol"
         articles_to_process = []
@@ -115,46 +119,45 @@ def seeking_alpha_extract():
 
 
 
-    # @task(
-    #     task_id='check_for_duplicate',
-    #     retries=0,
-    #     retry_delay=timedelta(seconds=5)
-    # )
-    # def check_for_duplicate_task(articles_metadata):
-    #     """
-    #     Task to retrieve news links for a specific stock ticker list from the Seeking Alpha API.
-        
-    #     Args:
-    #         tickets (list): A list of stock ticker symbol.
-    #         num (int): The number of articles to fetch.
-        
-    #     Returns:
-    #         list: A list of dictionaries containing article metadata; id, date of the article, title, and ticket.
-    #     """
-    #     mongo_hook = MongoHook(conn_id='mongo_test')
-    #     cached_articles = get_cache(client=mongo_hook, source='seeking_alpha')
-        
-    #     for article in articles_metadata:
-    #         latest_title = cached_articles.get(article['ticket'].lower())
-            
-    #         if article['title'] == latest_title:
-    #             article['duplicate'] = True
-        
-    #     return articles_metadata
-        
+    @task(
+        task_id='check_for_duplicate',
+        retries=0,
+        retry_delay=timedelta(seconds=5)
+    )
+    def check_for_duplicate_task(articles_metadata):
+        """
+        Checks if the articles retrieved from the API are already in the cache.
 
+        Args:
+            articles_metadata (list): A list of article metadata.
+        
+        Returns:
+            list: Updated list of article metadata, marking duplicates.
+        """
+        
+        mongo_hook = MongoHook(conn_id='mongo_test')
+        client = mongo_hook.get_conn()
+        cached_articles = get_cache(client=client, source='seeking_alpha')
+
+        for article in articles_metadata:
+            cached_title = cached_articles.get(article['ticket'].lower())
+            if article['title'] == cached_title:
+                article['duplicate'] = True
+
+        logger.info(f"Checked {len(articles_metadata)} articles for duplicates.")
+        return articles_metadata
+        
 
 
     @task(
         task_id='process_the_links',
         retries=0,
-        retry_delay=timedelta(seconds=5),
-        trigger_rule='all_done'
+        retry_delay=timedelta(seconds=5)
     )
     def process_links_task(articles_metadata):
         """
-        Task to fetch article bodies data and produce it to a Kafka topic.
-        
+        Fetches article bodies for non-duplicate articles and produces them to a Kafka topic.
+
         Args:
             articles_metadata (list): List of dictionaries containing article metadata.
         """
@@ -214,6 +217,9 @@ def seeking_alpha_extract():
                 )
                     
                 logger.info(f"Produced article {article.title} to Kafka topic {TOPIC_NAME}.")
+            
+            else:
+                logger.info(f'Found a duplicate article for {raw_article["ticket"]} -- {raw_article["title"]}')
 
         producer.flush()
         logger.info("Kafka producer flushed successfully.")
@@ -245,9 +251,11 @@ def seeking_alpha_extract():
 
 
     get_news_links = get_news_links_task(tickets)
-    process_links = process_links_task(get_news_links)
+    check_for_duplicate = check_for_duplicate_task(get_news_links)
+    process_links = process_links_task(check_for_duplicate)
     
-    get_news_links >> [process_links, telegram_failure_extract_msg]
+    get_news_links >> [check_for_duplicate, telegram_failure_extract_msg]
+    check_for_duplicate >> [process_links, telegram_failure_process_msg]
     process_links >> telegram_failure_process_msg
 
 
