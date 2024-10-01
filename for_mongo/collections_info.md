@@ -122,3 +122,36 @@ db.stock_sentiment.createIndex(
    { unique: true, name: "sentiment_test_ticket_tmstp" }
 );
 ```
+
+
+## collection: articles_cache
+This database stores the latest articles titles for each data source (seeking_alpha, motley_fool). Usually, this is the structure of the data:
+```json
+{
+  "ticket": "jpm",
+  "source": "seeking_alpha",
+  "title": "Trump floats temporary cap of ~10% on credit card interest rates - report"
+}
+```
+
+**Indexes:**
+
+- Unique index (ticket, source). Usefull for storing just the latest article for each source.
+
+```bash
+use stock_test;
+
+db.articles_cache.createIndex(
+  { "ticket": 1, "source": 1 },
+  { unique: true, name: "articles_cache_ticket_source" }
+);
+```
+
+- Index on source. Usefull for speeding up queries.
+
+```bash
+db.articles_cache.createIndex(
+    { source: 1 },
+    { name: "articles_cache_source_index"}
+);
+```

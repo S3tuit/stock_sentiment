@@ -16,7 +16,7 @@ from helper.bs4_functions import get_soup
 from tickets.tickets import TICKETS, NASDAQ, NYSE
 
 # Constants for Kafka
-TOPIC_NAME = "test.articles"
+TOPIC_NAME = "test.articles_v2"
 SCHEMA_REGISTRY_URL = Variable.get("SCHEMA_REGISTRY_URL")
 BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 

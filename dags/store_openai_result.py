@@ -7,7 +7,6 @@ from airflow.models import Variable
 from airflow.providers.telegram.operators.telegram import TelegramOperator
 from airflow.providers.mongo.hooks.mongo import MongoHook
 
-from helper.models import StockSentiment
 from helper.kafka_produce import make_producer, GenralProducerCallback
 from helper import schemas
 from helper.for_openai_api import get_info_from_mongo, get_sentiment
@@ -57,8 +56,6 @@ def store_openai_result():
         
         Args:
             ticket (str): A of stock ticker symbol.
-            producer (SerializingProducer): Producer to send messages to Kafka.
-            mongo_hook (MongoHook): Hook to access Mongo db 
         """
         mongo_hook = MongoHook(conn_id='mongo_test')
             

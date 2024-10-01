@@ -7,17 +7,19 @@ from bs4 import BeautifulSoup
 from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.providers.telegram.operators.telegram import TelegramOperator
+from airflow.providers.mongo.hooks.mongo import MongoHook
 
 from helper.models import Article
 from helper.kafka_produce import make_producer, ArticleProducerCallback
 from helper import schemas
+from helper.cached_articles import get_cache
 
 from tickets.tickets import TICKETS
 
 
 
 # Constants for Kafka and API configurations
-TOPIC_NAME = "test.articles"
+TOPIC_NAME = "test.articles_v2"
 API_KEY = Variable.get("SEEK_ALPHA_API_KEY")
 API_HOST = Variable.get("SEEK_ALPHA_API_HOST")
 SCHEMA_REGISTRY_URL = Variable.get("SCHEMA_REGISTRY_URL")
@@ -27,7 +29,8 @@ BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 chat_id = Variable.get("TELEGRAM_CHAT")
 
 # TICKETS is a dict -> {stock_name: exchange}
-tickets = TICKETS.keys()
+# tickets = TICKETS.keys()
+tickets = ['RIOT', 'JPM'] # for testing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,8 +46,12 @@ logger = logging.getLogger(__name__)
 )
 def seeking_alpha_extract():
     """
-    DAG to extract article data from the Seeking Alpha API, process the data,
-    and produce it to a Kafka topic.
+    This DAG performs the following steps:
+    1. Retrieves article links for stock from the Seeking Alpha API.
+    2. Compares article titles with cached data to check for duplicates.
+    3. Fetches article bodies and processes them if they are new.
+    4. Produces the articles to a Kafka topic.
+    5. Sends Telegram notifications on failure events.
     """
 
 
@@ -55,14 +62,14 @@ def seeking_alpha_extract():
     )
     def get_news_links_task(tickets, num=1):
         """
-        Task to retrieve news links for a specific stock ticker list from the Seeking Alpha API.
-        
+        Fetches article links for a list of stock tickers from the Seeking Alpha API.
+
         Args:
-            tickets (list): A list of stock ticker symbol.
-            num (int): The number of articles to fetch.
+            tickets (list): A list of stock ticker symbols.
+            num (int): The number of articles to fetch per ticker.
         
         Returns:
-            list: A list of dictionaries containing article metadata.
+            list: A list of article metadata, including id, timestamp, title, and ticker.
         """
         url = "https://seeking-alpha.p.rapidapi.com/news/v2/list-by-symbol"
         articles_to_process = []
@@ -95,7 +102,8 @@ def seeking_alpha_extract():
                         'id': row['id'],
                         'timestp': unix_timestamp,
                         'title': row['attributes']['title'],
-                        'ticket': ticket
+                        'ticket': ticket.lower(),
+                        'duplicate': False
                     })
                     
                     articles_retrived += 1
@@ -112,21 +120,50 @@ def seeking_alpha_extract():
 
 
     @task(
+        task_id='check_for_duplicate',
+        retries=0,
+        retry_delay=timedelta(seconds=5)
+    )
+    def check_for_duplicate_task(articles_metadata):
+        """
+        Checks if the articles retrieved from the API are already in the cache.
+
+        Args:
+            articles_metadata (list): A list of article metadata.
+        
+        Returns:
+            list: Updated list of article metadata, marking duplicates.
+        """
+        
+        mongo_hook = MongoHook(conn_id='mongo_test')
+        client = mongo_hook.get_conn()
+        cached_articles = get_cache(client=client, source='seeking_alpha')
+
+        for article in articles_metadata:
+            cached_title = cached_articles.get(article['ticket'].lower())
+            if article['title'] == cached_title:
+                article['duplicate'] = True
+
+        logger.info(f"Checked {len(articles_metadata)} articles for duplicates.")
+        return articles_metadata
+        
+
+
+    @task(
         task_id='process_the_links',
         retries=0,
-        retry_delay=timedelta(seconds=5),
-        trigger_rule='all_done'
+        retry_delay=timedelta(seconds=5)
     )
-    def process_links_task(raw_articles):
+    def process_links_task(articles_metadata):
         """
-        Task to process raw article data, extract content, and produce it to a Kafka topic.
-        
+        Fetches article bodies for non-duplicate articles and produces them to a Kafka topic.
+
         Args:
-            raw_articles (list): List of dictionaries containing raw article metadata.
+            articles_metadata (list): List of dictionaries containing article metadata.
         """
         
         # Useful to not mark the task as 'upstream_failed' when the one above fails. That's why trigger_rule='all_done'
-        if not raw_articles:
+        if not articles_metadata:
             logger.warning("No articles to process.")
             return
         
@@ -139,45 +176,50 @@ def seeking_alpha_extract():
         producer = make_producer(
             schema_reg_url=SCHEMA_REGISTRY_URL,
             bootstrap_server=BOOTSTRAP_SERVERS,
-            schema=schemas.article_schema_v1
+            schema=schemas.article_schema_v2
         )
         logger.info("Kafka producer created successfully.")
 
-        for raw_article in raw_articles:
-            querystring = {"id": raw_article['id']}
-            response = requests.get(url, headers=headers, params=querystring)
-            response.raise_for_status()
-            data = response.json()
+        for raw_article in articles_metadata:
+            if raw_article['duplicate'] == False:
+                querystring = {"id": raw_article['id']}
+                response = requests.get(url, headers=headers, params=querystring)
+                response.raise_for_status()
+                data = response.json()
 
-            # For logging
-            try:
-                # This is for extracting just the text, without html elemts like <p>
-                soup = BeautifulSoup(data['data']['attributes']['content'], 'html.parser')
-                article_content = soup.get_text()
+                # For logging
+                try:
+                    # This is for extracting just the text, without html elemts like <p>
+                    soup = BeautifulSoup(data['data']['attributes']['content'], 'html.parser')
+                    article_content = soup.get_text()
 
-                article = Article(
-                    ticket=raw_article['ticket'].lower(),
-                    timestp=raw_article['timestp'],
-                    url=data['data']['links']['canonical'],
-                    title=raw_article['title'],
-                    article_body=article_content
+                    article = Article(
+                        ticket=raw_article['ticket'].lower(),
+                        timestp=raw_article['timestp'],
+                        url=data['data']['links']['canonical'],
+                        title=raw_article['title'],
+                        article_body=article_content,
+                        source='seeking_alpha'
+                    )
+                
+                except Exception as e:
+                    logger.error(e)
+                    logger.error(f'The data sctructure is: {data}')
+                    raise
+                    
+                logger.info(f"Processed article: {article.title}")
+
+                producer.produce(
+                    topic=TOPIC_NAME,
+                    key=article.ticket,
+                    value=article,
+                    on_delivery=ArticleProducerCallback(article)
                 )
+                    
+                logger.info(f"Produced article {article.title} to Kafka topic {TOPIC_NAME}.")
             
-            except Exception as e:
-                logger.error(e)
-                logger.error(f'The data sctructure is: {data}')
-                raise
-                
-            logger.info(f"Processed article: {article.title}")
-
-            producer.produce(
-                topic=TOPIC_NAME,
-                key=article.ticket,
-                value=article,
-                on_delivery=ArticleProducerCallback(article)
-            )
-                
-            logger.info(f"Produced article {article.title} to Kafka topic {TOPIC_NAME}.")
+            else:
+                logger.info(f'Found a duplicate article for {raw_article["ticket"]} -- {raw_article["title"]}')
 
         producer.flush()
         logger.info("Kafka producer flushed successfully.")
@@ -209,9 +251,11 @@ def seeking_alpha_extract():
 
 
     get_news_links = get_news_links_task(tickets)
-    process_links = process_links_task(get_news_links)
+    check_for_duplicate = check_for_duplicate_task(get_news_links)
+    process_links = process_links_task(check_for_duplicate)
     
-    get_news_links >> [process_links, telegram_failure_extract_msg]
+    get_news_links >> [check_for_duplicate, telegram_failure_extract_msg]
+    check_for_duplicate >> [process_links, telegram_failure_process_msg]
     process_links >> telegram_failure_process_msg
 
 
