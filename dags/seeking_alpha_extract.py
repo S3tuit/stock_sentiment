@@ -24,13 +24,13 @@ API_KEY = Variable.get("SEEK_ALPHA_API_KEY")
 API_HOST = Variable.get("SEEK_ALPHA_API_HOST")
 SCHEMA_REGISTRY_URL = Variable.get("SCHEMA_REGISTRY_URL")
 BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
+SOURCE = 'seeking_alpha'
 
 # Parameters for Telegram bot
 chat_id = Variable.get("TELEGRAM_CHAT")
 
 # TICKETS is a dict -> {stock_name: exchange}
-# tickets = TICKETS.keys()
-tickets = ['RIOT', 'JPM'] # for testing
+tickets = TICKETS.keys()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -137,7 +137,7 @@ def seeking_alpha_extract():
         
         mongo_hook = MongoHook(conn_id='mongo_test')
         client = mongo_hook.get_conn()
-        cached_articles = get_cache(client=client, source='seeking_alpha')
+        cached_articles = get_cache(client=client, source=SOURCE)
 
         for article in articles_metadata:
             cached_title = cached_articles.get(article['ticket'].lower())
@@ -162,7 +162,6 @@ def seeking_alpha_extract():
             articles_metadata (list): List of dictionaries containing article metadata.
         """
         
-        # Useful to not mark the task as 'upstream_failed' when the one above fails. That's why trigger_rule='all_done'
         if not articles_metadata:
             logger.warning("No articles to process.")
             return
@@ -199,7 +198,7 @@ def seeking_alpha_extract():
                         url=data['data']['links']['canonical'],
                         title=raw_article['title'],
                         article_body=article_content,
-                        source='seeking_alpha'
+                        source=SOURCE
                     )
                 
                 except Exception as e:
