@@ -2,6 +2,17 @@
 
 
 def get_latest_articles(client, source):
+    '''
+    Retrieve the latest articles from a MongoDB collection for a specific source.
+
+    Args:
+        client (MongoClient): The MongoDB client used to connect to the database.
+        source (str): The source of the articles to be retrieved (e.g., "seeking_alpha", "motley_fool").
+
+    Returns:
+        list[dict]: A list of dictionaries representing the latest articles for each stock.
+                    Each dictionary contains: "ticket", "title", "source"
+    '''
 
     db = client.stock_test
     articles_collection = db.articles_test
@@ -25,6 +36,19 @@ def get_latest_articles(client, source):
 
 
 def upsert_articles(article_entities, client):
+    '''
+    Perform an upsert operation for a list of articles into the MongoDB cache.
+
+    Args:
+        article_entities (list[dict]): A list of dictionaries representing articles.
+                                        Each dictionary should contain: "ticket", "title", "source"
+        client (MongoClient): The MongoDB client used to connect to the database.
+    
+    Returns:
+        None: This function does not return anything but updates the MongoDB collection in place.
+
+    '''
+    
     # Perform upsert operations on articles_cache
     db = client.stock_test
     cache_collection = db.articles_cache
@@ -39,12 +63,23 @@ def upsert_articles(article_entities, client):
         )
 
 def get_cache(client, source):
-        db = client.stock_test
-        collection = db.articles_cache
+    '''
+    Retrieve all cached articles for a specific source from the MongoDB cache.
 
-        # Query to find documents with ticket "RIOT" and limit to the 3 most recent
-        mongo_result = collection.find({"source": source}, {"ticket": 1, "title": 1, '_id': 0})
+    Args:
+        client (MongoClient): The MongoDB client used to connect to the database.
+        source (str): The source of the articles to retrieve from the cache (e.g., "seeking_alpha", "motley_fool").
+
+    Returns:
+        dict: A dictionary where the keys are stock tickers (str), and the values are article titles (str).
+    '''
+    
+    db = client.stock_test
+    collection = db.articles_cache
+
+    # Query to find documents with ticket "RIOT" and limit to the 3 most recent
+    mongo_result = collection.find({"source": source}, {"ticket": 1, "title": 1, '_id': 0})
         
-        cached_articles = {article['ticket']: article['title'] for article in mongo_result}
+    cached_articles = {article['ticket']: article['title'] for article in mongo_result}
         
-        return cached_articles        
+    return cached_articles        

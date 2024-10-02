@@ -37,6 +37,15 @@ db.articles_test.createIndex(
 );
 ```
 
+- Index on source. Usefull for speeding up queries.
+
+```bash
+db.articles_test.createIndex(
+    { source: 1 },
+    { name: "articles_test_source_index"}
+);
+```
+
 ## collection: balance_sheet
 This database stores balance sheet and earning data retrived via API. Usually, this is the structure of the data:
 ```json
