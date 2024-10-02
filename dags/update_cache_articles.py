@@ -86,11 +86,12 @@ def update_cache_articles():
         mongo_hook = MongoHook(conn_id='mongo_test')
         client = mongo_hook.get_conn()
         
-        latest_articles = get_latest_articles(client=client, source='seeking_alpha')
-        logger.info(f"Retrieved {len(latest_articles)} articles from Seeking Alpha.")
-        
-        upsert_articles(article_entities=latest_articles, client=client)
-        logger.info("Successfully upserted Seeking Alpha articles into MongoDB cache.")
+        for source in ['seeking_alpha', 'motley_fool']:
+            latest_articles = get_latest_articles(client=client, source=source)
+            logger.info(f"Retrieved {len(latest_articles)} articles from {source}.")
+            
+            upsert_articles(article_entities=latest_articles, client=client)
+            logger.info(f"Successfully upserted {source} articles into MongoDB cache.")
         
         
     mongo_down = TelegramOperator(

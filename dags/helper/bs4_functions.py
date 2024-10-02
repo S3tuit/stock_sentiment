@@ -1,5 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
+from time import sleep
+from random import choice
 
 
 def get_soup(logger, ticket, urls, **kwargs):
@@ -37,3 +39,24 @@ def get_soup(logger, ticket, urls, **kwargs):
     logger.info(f'Page found for url: {url}')
     soup = BeautifulSoup(response.text, 'html.parser')
     return soup
+
+def wait_and_rotate_agent(wait_time=10):
+    """
+    Sleep for the specified time and return a randomly chosen user-agent string.
+    This helps avoid detection and rate-limiting when scraping.
+    
+    Args:
+        wait_time (int): The time in seconds to wait before proceeding.
+    
+    Returns:
+        dict: A dictionary with the 'User-Agent' header.
+    """
+    
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/127.0.0.0'
+    ]
+    
+    sleep(wait_time)
+    return {'User-Agent': choice(user_agents)}
