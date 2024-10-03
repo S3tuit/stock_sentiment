@@ -1,3 +1,3 @@
 NYSE = 0
 NASDAQ = 1
-TICKETS = {'RIOT': 1, 'ACMR': 1, 'OXY': 0, 'AAPL': 1, 'JNJ': 0, 'WMT': 0, 'PG': 0, 'PATH': 0, 'BYND': 1, 'JPM':0}
+TICKETS = {'riot': 1, 'acmr': 1, 'oxy': 0, 'aapl': 1, 'jnj': 0, 'wmt': 0, 'pg': 0, 'path': 0, 'bynd': 1, 'jpm':0}
