@@ -1,5 +1,6 @@
 
 
+### ARTICLES
 
 def get_latest_articles(client, source):
     '''
@@ -62,7 +63,7 @@ def upsert_articles(article_entities, client):
             upsert=True  # Upsert flag to insert if no match is found
         )
 
-def get_cache(client, source):
+def get_cached_articles(client, source):
     '''
     Retrieve all cached articles for a specific source from the MongoDB cache.
 
@@ -77,9 +78,48 @@ def get_cache(client, source):
     db = client.stock_test
     collection = db.articles_cache
 
-    # Query to find documents with ticket "RIOT" and limit to the 3 most recent
     mongo_result = collection.find({"source": source}, {"ticket": 1, "title": 1, '_id': 0})
         
     cached_articles = {article['ticket']: article['title'] for article in mongo_result}
         
     return cached_articles        
+
+
+### BALANCE SHEET
+def get_latest_balance_time(client, tickers, timestp_threshold):
+    '''
+    Retrieve the latest articles from a MongoDB collection for specific tickers,
+    where the latest article's `timestp` is less than the given threshold.
+
+    Args:
+        client (MongoClient): The MongoDB client used to connect to the database.
+        tickers (list): The stock tickers to retrieve articles for.
+        timestp_threshold (int): The maximum `timestp` value for the latest article. Unix time.
+
+    Returns:
+        list: A list that contains all the tickers that have the latest balance sheet before timestp_threshold
+    '''
+
+    db = client.stock_test
+    balance_sheet_collection = db.balance_sheet
+
+    pipeline = [
+        {"$match": {"ticket": {"$in": tickers}}},
+        {"$sort": {"ticket": 1, "timestp": -1}},  # Sort by ticket and then by timestamp (most recent first)
+        {"$group": {
+            "_id": "$ticket",
+            "latest_timestp": {"$first": "$timestp"} # Get the timestp of the latest balance sheet
+        }},
+        {"$match": {"latest_timestp": {"$lt": timestp_threshold}}}, # Retrieve the timestp only if it's lower than timestp_threshold
+        {"$project": {
+            "_id": 0,
+            "ticket": "$_id",
+            "timestp": "$latest_timestp"
+        }}
+    ]
+
+    latest_balances = list(balance_sheet_collection.aggregate(pipeline))
+    
+    too_old_balance_sheet = [stock['ticket'] for stock in latest_balances]
+    
+    return too_old_balance_sheet

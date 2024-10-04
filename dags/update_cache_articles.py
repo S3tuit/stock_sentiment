@@ -7,7 +7,7 @@ from airflow.models import Variable
 from airflow.providers.telegram.operators.telegram import TelegramOperator
 from airflow.providers.mongo.hooks.mongo import MongoHook
 
-from helper.cached_articles import get_latest_articles, upsert_articles
+from helper.cached_mongo import get_latest_articles, upsert_articles
 
 
 # Constants for Kafka and API configurations
@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 @dag(
-    schedule=None,
-    start_date=datetime(2024, 8, 19),
+    schedule="30 13 * * 2-6",  # Runs from Tuesday to Saturday at 13:30
+    start_date=datetime(2024, 10, 5),
     catchup=False,
     tags=["stock_sentiment"]
 )

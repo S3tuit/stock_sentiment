@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 
 @dag(
-    schedule=None,
-    start_date=datetime(2024, 8, 19),
+    schedule="15 13 * * 2-6",  # Runs from Tuesday to Saturday at 13:15
+    start_date=datetime(2024, 10, 5),
     catchup=False,
     tags=["stock_sentiment"]
 )

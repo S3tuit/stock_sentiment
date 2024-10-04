@@ -11,7 +11,7 @@ from helper.models import Article
 from helper.kafka_produce import make_producer, ArticleProducerCallback
 from helper import schemas
 from helper.bs4_functions import get_soup, wait_and_rotate_agent
-from helper.cached_articles import get_cache
+from helper.cached_mongo import get_cached_articles
 
 from tickets.tickets import TICKETS, NASDAQ, NYSE
 
@@ -31,8 +31,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @dag(
-    schedule=None,
-    start_date=datetime(2024, 8, 19),
+    schedule="0 13 * * 5",  # Every Friday at 13
+    start_date=datetime(2024, 10, 5),
     catchup=False,
     tags=["stock_sentiment"]
 )
@@ -118,7 +118,7 @@ def motley_fool_extract():
         
         mongo_hook = MongoHook(conn_id='mongo_test')
         client = mongo_hook.get_conn()
-        cached_articles = get_cache(client=client, source=SOURCE)
+        cached_articles = get_cached_articles(client=client, source=SOURCE)
 
         for article in article_basic_info:
             cached_title = cached_articles.get(article['ticket'].lower())
