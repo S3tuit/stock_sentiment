@@ -34,8 +34,8 @@ OPENAI_API_KEY = Variable.get("OPENAI_API_KEY")
 
 
 @dag(
-    schedule=None,
-    start_date=datetime(2024, 8, 19),
+    schedule="0 14 * * 6",  # Runs each Saturday at 14
+    start_date=datetime(2024, 10, 5),
     catchup=False,
     tags=["stock_sentiment"]
 )

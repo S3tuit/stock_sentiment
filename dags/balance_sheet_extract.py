@@ -7,10 +7,12 @@ from time import sleep
 from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.providers.telegram.operators.telegram import TelegramOperator
+from airflow.providers.mongo.hooks.mongo import MongoHook
 
 from helper.models import BalanceSheet
 from helper.kafka_produce import make_producer, GenralProducerCallback
 from helper import schemas
+from helper.cached_mongo import get_latest_balance_time
 
 from tickets.tickets import TICKETS
 
@@ -28,6 +30,9 @@ chat_id = Variable.get("TELEGRAM_CHAT")
 # TICKETS is a dict -> {stock_name: exchange}
 tickets = list(TICKETS.keys())
 
+# How many days before making another call to update the balance sheet
+DAYS_TO_WAIT = 120
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,8 +40,8 @@ logger = logging.getLogger(__name__)
 
 
 @dag(
-    schedule=None,
-    start_date=datetime(2024, 8, 19),
+    schedule="0 13 * * 1",  # Runs each Monday at 13:00
+    start_date=datetime(2024, 10, 5),
     catchup=False,
     tags=["stock_sentiment"]
 )
@@ -51,8 +56,7 @@ def balance_sheet_extract():
         task_id='is_api_available',
         retries=1,
         retry_delay=timedelta(seconds=10),
-        execution_timeout=timedelta(seconds=30),
-        depends_on_past=True
+        execution_timeout=timedelta(seconds=30)
     )
     def is_api_available_task(ticket):
         """
@@ -64,13 +68,14 @@ def balance_sheet_extract():
         Returns:
             task: 'balance_sheet_extract' if the api is up, 'telegram_api_down' otherwise.
         """
+
         try:
             url_to_test = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticket}&apikey={API_KEY}'
             response = requests.get(url_to_test)
             
             response.raise_for_status()
             
-            return 'balance_sheet_extract'
+            return 'is_too_early'
             
         except Exception as e:
             logger.error(e)
@@ -79,10 +84,31 @@ def balance_sheet_extract():
 
 
     @task(
+        task_id='is_too_early',
+        retries=0,
+        retry_delay=timedelta(seconds=5)
+    )
+    def is_too_early_task(tickets):
+        mongo_hook = MongoHook(conn_id='mongo_test')
+        client = mongo_hook.get_conn()
+        
+        now_minus_120_days = int(datetime.now().timestamp()) - (DAYS_TO_WAIT * 24 * 60 * 60)
+        
+        too_old_balance_sheet = get_latest_balance_time(client=client, tickers=tickets, timestp_threshold=now_minus_120_days)
+        
+        if not too_old_balance_sheet:
+            logger.info(f"There's no balance sheet retrived before {DAYS_TO_WAIT} days from now.")
+            
+            return ['all_up_to_date']
+        
+        return too_old_balance_sheet      
+        
+        
+
+    @task(
         task_id='balance_sheet_extract',
         retries=0,
-        retry_delay=timedelta(seconds=5),
-        trigger_rule='all_done'
+        retry_delay=timedelta(seconds=5)
     )
     def balance_sheet_extract_task(tickets):
         """
@@ -95,6 +121,10 @@ def balance_sheet_extract():
         if not tickets:
             logger.error("*tickets* is NULL, no tickets to process.")
             raise
+        
+        if tickets[0] == 'all_up_to_date':
+            logger.info(f"There's no balance sheet retrived before {DAYS_TO_WAIT} days from now.")
+            return
         
         producer = make_producer(
             schema_reg_url=SCHEMA_REGISTRY_URL,
@@ -193,9 +223,11 @@ def balance_sheet_extract():
 
 
     is_api_available = is_api_available_task(tickets[0])
-    balance_sheet = balance_sheet_extract_task(tickets)
+    is_too_early = is_too_early_task(tickets)
+    balance_sheet = balance_sheet_extract_task(is_too_early)
     
-    is_api_available >> [telegram_api_down, balance_sheet]
+    is_api_available >> [telegram_api_down, is_too_early]
+    is_too_early >> [balance_sheet, telegram_failure_msg]
     balance_sheet >> telegram_failure_msg
 
 
