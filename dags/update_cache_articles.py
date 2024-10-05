@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 
 @dag(
-    schedule="30 13 * * 2-6",  # Runs from Tuesday to Saturday at 13:30
+    schedule="30 11 * * 2-6",  # Runs from Tuesday to Saturday at 11 UTC
     start_date=datetime(2024, 10, 5),
-    catchup=False,
+    catchup=True,
     tags=["stock_sentiment"]
 )
 def update_cache_articles():

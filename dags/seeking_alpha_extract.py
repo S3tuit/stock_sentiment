@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 
 
 @dag(
-    schedule="0 13 * * 2-6",  # Runs from Tuesday to Saturday at 13
+    schedule="0 11 * * 2-6",  # Runs from Tuesday to Saturday at 11 UTC
     start_date=datetime(2024, 10, 5),
-    catchup=False,
+    catchup=True,
     tags=["stock_sentiment"]
 )
 def seeking_alpha_extract():

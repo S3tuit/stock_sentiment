@@ -31,9 +31,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @dag(
-    schedule="0 13 * * 5",  # Every Friday at 13
+    schedule="0 11 * * 5",  # Every Friday at 11 UTC
     start_date=datetime(2024, 10, 5),
-    catchup=False,
+    catchup=True,
     tags=["stock_sentiment"]
 )
 def motley_fool_extract():

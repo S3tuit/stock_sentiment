@@ -40,9 +40,9 @@ logger = logging.getLogger(__name__)
 
 
 @dag(
-    schedule="0 13 * * 1",  # Runs each Monday at 13:00
+    schedule="0 11 * * 1",  # Runs each Monday at 11 UTC
     start_date=datetime(2024, 10, 5),
-    catchup=False,
+    catchup=True,
     tags=["stock_sentiment"]
 )
 def balance_sheet_extract():

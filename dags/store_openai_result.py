@@ -34,9 +34,9 @@ OPENAI_API_KEY = Variable.get("OPENAI_API_KEY")
 
 
 @dag(
-    schedule="0 14 * * 6",  # Runs each Saturday at 14
+    schedule="0 13 * * 6",  # Runs each Saturday at 13 UTC
     start_date=datetime(2024, 10, 5),
-    catchup=False,
+    catchup=True,
     tags=["stock_sentiment"]
 )
 def store_openai_result():
