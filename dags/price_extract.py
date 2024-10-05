@@ -35,9 +35,9 @@ logger = logging.getLogger(__name__)
 
 
 @dag(
-    schedule="15 13 * * 2-6",  # Runs from Tuesday to Saturday at 13:15
+    schedule="15 11 * * 2-6",  # Runs from Tuesday to Saturday at 11:15 UTC
     start_date=datetime(2024, 10, 5),
-    catchup=False,
+    catchup=True,
     tags=["stock_sentiment"]
 )
 def price_extract():
@@ -51,8 +51,7 @@ def price_extract():
         task_id='is_api_available',
         retries=1,
         retry_delay=timedelta(seconds=10),
-        execution_timeout=timedelta(seconds=30),
-        depends_on_past=True
+        execution_timeout=timedelta(seconds=30)
     )
     def is_api_available_task(ticket):
         """
