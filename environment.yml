@@ -22,3 +22,4 @@ dependencies:
     - apache-airflow-providers-apache-kafka==1.1.2
     - apache-airflow-providers-telegram==4.1.1
     - apache-airflow-providers-mongo==3.2.1S
+    
