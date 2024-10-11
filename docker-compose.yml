@@ -1,5 +1,5 @@
 ---
-# version: '2'
+# version: '2.1'
 
 x-airflow-common:
   &airflow-common
@@ -56,6 +56,7 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    restart: on-failure[5]
 
   broker:
     image: confluentinc/cp-kafka:7.3.2
@@ -78,7 +79,9 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
-    restart: always
+    volumes:
+      - kafka-data:/var/lib/kafka/data  # Volume for Kafka topics
+    restart: on-failure[5]
 
   schema-registry:
     image: confluentinc/cp-schema-registry:7.3.2
@@ -92,6 +95,7 @@ services:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    restart: on-failure[5]
 
   kafka-connect:
     # image: confluentinc/cp-kafka-connect-base:6.1.4
@@ -121,12 +125,15 @@ services:
       CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
       CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka-connect-data:/var/lib/kafka-connect/data  # Volume for Kafka Connect
+    restart: on-failure[5]
 
   cli-tools:
     image: confluentinc/cp-kafka:7.3.2
     container_name: cli-tools
     entrypoint: "sleep infinity"
-    restart: always
+    restart: on-failure[5]
 
   kafka-ui:
     container_name: kafka-ui
@@ -144,6 +151,7 @@ services:
       KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
       KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
       DYNAMIC_CONFIG_ENABLED: 'true'
+    restart: on-failure[5]
 
 # MONGO
   mongodb:
@@ -155,13 +163,15 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=peppa
       - MONGO_INITDB_ROOT_PASSWORD=peppa
-    restart: always
+    volumes:
+      - mongodb-data:/data/db  # Volume for MongoDB data persistence
+    restart: on-failure[5]
 
   mongosh:
     image: mongo:5.0
     container_name: mongosh
     entrypoint: "sleep infinity"
-    restart: always
+    restart: on-failure[5]
 
 # FOR AIRFLOW
   postgres:
@@ -177,7 +187,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 5s
-    restart: always
+    restart: on-failure[5]
 
   redis:
     image: redis:latest
@@ -189,7 +199,7 @@ services:
       timeout: 30s
       retries: 50
       start_period: 30s
-    restart: always
+    restart: on-failure[5]
 
   airflow-webserver:
     <<: *airflow-common
@@ -202,11 +212,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: on-failure[5]
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+      kafka-connect:
+        condition: service_healthy  # Wait for kafka-connect health check to succeed
 
   airflow-scheduler:
     <<: *airflow-common
@@ -217,11 +229,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: on-failure[5]
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+      kafka-connect:
+        condition: service_healthy  # Wait for kafka-connect health check to succeed
 
   airflow-worker:
     <<: *airflow-common
@@ -240,11 +254,13 @@ services:
       # Required to handle warm shutdown of the celery workers properly
       # See https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
       DUMB_INIT_SETSID: "0"
-    restart: always
+    restart: on-failure[5]
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+      kafka-connect:
+        condition: service_healthy  # Wait for kafka-connect health check to succeed
 
   airflow-triggerer:
     <<: *airflow-common
@@ -255,11 +271,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: on-failure[5]
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+      kafka-connect:
+        condition: service_healthy  # Wait for kafka-connect health check to succeed
 
   airflow-init:
     <<: *airflow-common
@@ -368,11 +386,16 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: on-failure[5]
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+      kafka-connect:
+        condition: service_healthy  # Wait for kafka-connect health check to succeed
 
 volumes:
   postgres-db-volume:
+  kafka-data:   # Volume for Kafka broker data
+  kafka-connect-data:  # Volume for Kafka Connect data
+  mongodb-data:
