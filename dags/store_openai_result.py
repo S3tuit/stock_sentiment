@@ -37,7 +37,11 @@ OPENAI_API_KEY = Variable.get("OPENAI_API_KEY")
     schedule="0 13 * * 6",  # Runs each Saturday at 13 UTC
     start_date=datetime(2024, 10, 5),
     catchup=True,
-    tags=["stock_sentiment"]
+    tags=["stock_sentiment"],
+    max_active_tasks=1,  # This limits the DAG to run one task at a time
+    default_args={
+        "max_active_tis_per_dag": 1  # This ensures only one task instance runs at any point, otherwise pc crushes :(
+    }
 )
 def store_openai_result():
     """
