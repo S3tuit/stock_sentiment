@@ -4,10 +4,10 @@ article_schema_v2 = """
 	"type": "record",
 	"name": "article_schema_v2",
 	"namespace": "com.article.schema.v2",
-	"doc": "The key is TICKET. The first version of my schema for the extracted articles.",
+	"doc": "The key is TICKER. The first version of my schema for the extracted articles.",
 	"fields": [
 		{
-			"name": "ticket",
+			"name": "ticker",
 			"type": "string"
 		},
 		{
@@ -43,11 +43,11 @@ prices_schema_v1 = """
 {
     "name": "prices_schema_v1",
     "namespace": "com.prices.schema.v1",
-    "doc": "Schema for the Prices record containing ticket information, timestamp, price and volume data, and technical analysis indicators. The key is ticket.",
+    "doc": "Schema for the Prices record containing ticker information, timestamp, price and volume data, and technical analysis indicators. The key is ticker.",
     "type": "record",
     "fields": [
         {
-            "name": "ticket",
+            "name": "ticker",
             "type": "string"
         },
         {
@@ -79,11 +79,11 @@ balance_sheet_schema_v1 = """
 {
     "name": "prices_schema_v1",
     "namespace": "com.prices.schema.v1",
-    "doc": "Schema for the BalanceSheet model. The key is ticket.",
+    "doc": "Schema for the BalanceSheet model. The key is ticker.",
     "type": "record",
     "fields": [
         {
-            "name": "ticket",
+            "name": "ticker",
             "type": "string"
         },
         {
@@ -116,7 +116,7 @@ stock_sentiment_schema_v1 = """
 	"type": "record",
 	"name": "StockSentiment",
 	"namespace": "com.sentiment.schema.v1",
-	"doc": "Schema for the StockSentiment model. The key is the stock ticker (ticket).",
+	"doc": "Schema for the StockSentiment model. The key is the stock ticker (ticker).",
 	"fields": [
 		{
 			"name": "next_month_prediction",
@@ -134,7 +134,7 @@ stock_sentiment_schema_v1 = """
 			"doc": "Detailed reasoning behind the stock sentiment and predictions."
 		},
 		{
-			"name": "ticket",
+			"name": "ticker",
 			"type": "string",
 			"doc": "Stock ticker symbol."
 		},

@@ -12,7 +12,7 @@ from helper.models import Prices
 from helper.kafka_produce import make_producer, GenralProducerCallback
 from helper import schemas
 
-from tickets.tickets import TICKETS
+from tickers.tickers import TICKERS
 
 
 
@@ -25,8 +25,8 @@ BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 # Parameters for Telegram bot
 chat_id = Variable.get("TELEGRAM_CHAT")
 
-# TICKETS is a dict -> {stock_name: exchange}
-tickets = list(TICKETS.keys())
+# TICKERS is a dict -> {stock_name: exchange}
+tickers = list(TICKERS.keys())
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,18 +53,18 @@ def price_extract():
         retry_delay=timedelta(seconds=10),
         execution_timeout=timedelta(seconds=30)
     )
-    def is_api_available_task(ticket):
+    def is_api_available_task(ticker):
         """
         Branch operator to check wheter the AlphaVantage API is up and the key is correct.
         
         Args:
-            ticket (str): A stock ticker symbol.
+            ticker (str): A stock ticker symbol.
         
         Returns:
             task: 'get_the_prices' if the api is up, 'telegram_api_down' otherwise.
         """
         try:
-            url_to_test = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticket}&apikey={API_KEY}'
+            url_to_test = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticker}&apikey={API_KEY}'
             response = requests.get(url_to_test)
             
             response.raise_for_status()
@@ -83,16 +83,16 @@ def price_extract():
         retry_delay=timedelta(seconds=5),
         trigger_rule='all_done'
     )
-    def get_the_prices_task(tickets):
+    def get_the_prices_task(tickers):
         """
         Task to get daily price data, extract useful info, and produce it to a Kafka topic.
         
         Args:
-            tickets (list): List of stock ticket symbols.
+            tickers (list): List of stock ticker symbols.
         """
         
-        if not tickets:
-            logger.error("tickets is NULL, no tickets to process.")
+        if not tickers:
+            logger.error("tickers is NULL, no tickers to process.")
             raise
         
         producer = make_producer(
@@ -102,13 +102,13 @@ def price_extract():
         )
         logger.info("Kafka producer created successfully.")
         
-        for ticket in tickets:
+        for ticker in tickers:
             
             # For logging 
             try:
                 daily_price = 'None'
                 # Get the price and volume of the last trading day
-                url_daily_price = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticket}&apikey={API_KEY}'
+                url_daily_price = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticker}&apikey={API_KEY}'
                 daily_price = requests.get(url_daily_price).json()
                 daily_price = daily_price['Global Quote']
                 
@@ -125,7 +125,7 @@ def price_extract():
                 technicals = 'None'
                 # Get technical values of the last trading day and keep just the useful (for this purpose) ones
                 technicals_useful = ['52WeekHigh', '52WeekLow', '50DayMovingAverage', '200DayMovingAverage']
-                url_technicals = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticket}&apikey={API_KEY}'
+                url_technicals = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker}&apikey={API_KEY}'
                 technicals = requests.get(url_technicals).json()
                 technicals = {key: technicals.get(key) for key in technicals_useful}
             except Exception as e:
@@ -133,26 +133,26 @@ def price_extract():
                 logger.error(f'The technicals sctructure is: {technicals}')
                 raise
             
-            logger.info(f"Successfully retrived info for: {ticket}")
+            logger.info(f"Successfully retrived info for: {ticker}")
             
             
             price = Prices(
-                ticket=ticket.lower(),
+                ticker=ticker.lower(),
                 timestp=int(datetime_trading_day.timestamp()),
                 price_n_volume=daily_price,
                 technicals=technicals
             )
         
-            logger.info(f"Successfully processed price for: {ticket}")
+            logger.info(f"Successfully processed price for: {ticker}")
 
             producer.produce(
                 topic=TOPIC_NAME,
-                key=price.ticket,
+                key=price.ticker,
                 value=price,
                 on_delivery=GenralProducerCallback(price)
             )
                 
-            logger.info(f"Produced price info about {ticket} to Kafka topic {TOPIC_NAME}.")
+            logger.info(f"Produced price info about {ticker} to Kafka topic {TOPIC_NAME}.")
             
             # This will reduce the strain on the free service (tnx)
             sleep(1)
@@ -181,8 +181,8 @@ def price_extract():
     )
 
 
-    is_api_available = is_api_available_task(tickets[0])
-    get_the_prices = get_the_prices_task(tickets)
+    is_api_available = is_api_available_task(tickers[0])
+    get_the_prices = get_the_prices_task(tickers)
     
     is_api_available >> [telegram_api_down, get_the_prices]
     get_the_prices >> telegram_failure_msg

@@ -14,7 +14,7 @@ from helper.kafka_produce import make_producer, ArticleProducerCallback
 from helper import schemas
 from helper.cached_mongo import get_cached_articles
 
-from tickets.tickets import TICKETS
+from tickers.tickers import TICKERS
 
 
 
@@ -29,8 +29,8 @@ SOURCE = 'seeking_alpha'
 # Parameters for Telegram bot
 chat_id = Variable.get("TELEGRAM_CHAT")
 
-# TICKETS is a dict -> {stock_name: exchange}
-tickets = TICKETS.keys()
+# TICKERS is a dict -> {stock_name: exchange}
+tickers = TICKERS.keys()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

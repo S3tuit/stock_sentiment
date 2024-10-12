@@ -1,3 +1,3 @@
-- **test_articles_to_mongo.json**. It defines a connectors that read the messages in the topic *test.articles* and writes to Mongo; db=stock_test, collection=articles_test. Mongo has an unique index on (ticket, article title). If the connector tries to write the same article twice it won't fail, it has "errors.tolerance": "all".
+- **test_articles_to_mongo.json**. It defines a connectors that read the messages in the topic *test.articles* and writes to Mongo; db=stock_test, collection=articles_test. Mongo has an unique index on (ticker, article title). If the connector tries to write the same article twice it won't fail, it has "errors.tolerance": "all".
 
-- **test_price_to_mongo.json**. The same as *test_articles_to_mongo*. It listens to the topi test_price and writes Mongo; db=stock_test, collection=price_info. The unique index on Mongo is (ticket, timestp).
+- **test_price_to_mongo.json**. The same as *test_articles_to_mongo*. It listens to the topi test_price and writes Mongo; db=stock_test, collection=price_info. The unique index on Mongo is (ticker, timestp).

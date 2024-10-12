@@ -14,7 +14,7 @@ from helper.kafka_produce import make_producer, ArticleProducerCallback
 from helper import schemas
 from helper.cached_mongo import get_cached_articles
 
-from tickets.tickets import TICKETS
+from tickers.tickers import TICKERS
 
 
 
@@ -29,8 +29,8 @@ SOURCE = 'seeking_alpha'
 # Parameters for Telegram bot
 chat_id = Variable.get("TELEGRAM_CHAT")
 
-# TICKETS is a dict -> {stock_name: exchange}
-tickets = TICKETS.keys()
+# TICKERS is a dict -> {stock_name: exchange}
+tickers = TICKERS.keys()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -60,12 +60,12 @@ def seeking_alpha_extract():
         retries=0,
         retry_delay=timedelta(seconds=5)
     )
-    def get_news_links_task(tickets, num=1):
+    def get_news_links_task(tickers, num=1):
         """
         Fetches article links for a list of stock tickers from the Seeking Alpha API.
 
         Args:
-            tickets (list): A list of stock ticker symbols.
+            tickers (list): A list of stock ticker symbols.
             num (int): The number of articles to fetch per ticker.
         
         Returns:
@@ -78,8 +78,8 @@ def seeking_alpha_extract():
             "x-rapidapi-host": API_HOST
         }
 
-        for ticket in tickets:
-            querystring = {"size": num, "number": "1", "id": ticket}
+        for ticker in tickers:
+            querystring = {"size": num, "number": "1", "id": ticker}
             
             response = requests.get(url, headers=headers, params=querystring)
             response.raise_for_status()
@@ -102,7 +102,7 @@ def seeking_alpha_extract():
                         'id': row['id'],
                         'timestp': unix_timestamp,
                         'title': row['attributes']['title'],
-                        'ticket': ticket.lower(),
+                        'ticker': ticker.lower(),
                         'duplicate': False
                     })
                     
@@ -113,7 +113,7 @@ def seeking_alpha_extract():
                 logger.error(f'The data sctructure is: {data}')
                 raise
                 
-            logger.info(f"Successfully retrieved {articles_retrived} articles for ticket {ticket}.")
+            logger.info(f"Successfully retrieved {articles_retrived} articles for ticker {ticker}.")
 
         return articles_to_process
 
@@ -140,7 +140,7 @@ def seeking_alpha_extract():
         cached_articles = get_cached_articles(client=client, source=SOURCE)
 
         for article in articles_metadata:
-            cached_title = cached_articles.get(article['ticket'].lower())
+            cached_title = cached_articles.get(article['ticker'].lower())
             if article['title'] == cached_title:
                 article['duplicate'] = True
 
@@ -193,7 +193,7 @@ def seeking_alpha_extract():
                     article_content = soup.get_text()
 
                     article = Article(
-                        ticket=raw_article['ticket'].lower(),
+                        ticker=raw_article['ticker'].lower(),
                         timestp=raw_article['timestp'],
                         url=data['data']['links']['canonical'],
                         title=raw_article['title'],
@@ -210,7 +210,7 @@ def seeking_alpha_extract():
 
                 producer.produce(
                     topic=TOPIC_NAME,
-                    key=article.ticket,
+                    key=article.ticker,
                     value=article,
                     on_delivery=ArticleProducerCallback(article)
                 )
@@ -218,7 +218,7 @@ def seeking_alpha_extract():
                 logger.info(f"Produced article {article.title} to Kafka topic {TOPIC_NAME}.")
             
             else:
-                logger.info(f'Found a duplicate article for {raw_article["ticket"]} -- {raw_article["title"]}')
+                logger.info(f'Found a duplicate article for {raw_article["ticker"]} -- {raw_article["title"]}')
 
         producer.flush()
         logger.info("Kafka producer flushed successfully.")
@@ -249,7 +249,7 @@ def seeking_alpha_extract():
     )
 
 
-    get_news_links = get_news_links_task(tickets)
+    get_news_links = get_news_links_task(tickers)
     check_for_duplicate = check_for_duplicate_task(get_news_links)
     process_links = process_links_task(check_for_duplicate)
     

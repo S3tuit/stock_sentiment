@@ -14,7 +14,7 @@ from helper.kafka_produce import make_producer, GenralProducerCallback
 from helper import schemas
 from helper.cached_mongo import get_latest_balance_time
 
-from tickets.tickets import TICKETS
+from tickers.tickers import TICKERS
 
 
 
@@ -27,8 +27,8 @@ BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 # Parameters for Telegram bot
 chat_id = Variable.get("TELEGRAM_CHAT")
 
-# TICKETS is a dict -> {stock_name: exchange}
-tickets = list(TICKETS.keys())
+# TICKERS is a dict -> {stock_name: exchange}
+tickers = list(TICKERS.keys())
 
 # How many days before making another call to update the balance sheet
 DAYS_TO_WAIT = 120
@@ -58,19 +58,19 @@ def balance_sheet_extract():
         retry_delay=timedelta(seconds=10),
         execution_timeout=timedelta(seconds=30)
     )
-    def is_api_available_task(ticket):
+    def is_api_available_task(ticker):
         """
         Branch operator to check wheter the AlphaVantage API is up and the key is correct.
         
         Args:
-            ticket (str): A stock ticker symbol.
+            ticker (str): A stock ticker symbol.
         
         Returns:
             task: 'balance_sheet_extract' if the api is up, 'telegram_api_down' otherwise.
         """
 
         try:
-            url_to_test = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticket}&apikey={API_KEY}'
+            url_to_test = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticker}&apikey={API_KEY}'
             response = requests.get(url_to_test)
             
             response.raise_for_status()
@@ -88,13 +88,13 @@ def balance_sheet_extract():
         retries=0,
         retry_delay=timedelta(seconds=5)
     )
-    def is_too_early_task(tickets):
+    def is_too_early_task(tickers):
         mongo_hook = MongoHook(conn_id='mongo_test')
         client = mongo_hook.get_conn()
         
         now_minus_120_days = int(datetime.now().timestamp()) - (DAYS_TO_WAIT * 24 * 60 * 60)
         
-        too_old_balance_sheet = get_latest_balance_time(client=client, tickers=tickets, timestp_threshold=now_minus_120_days)
+        too_old_balance_sheet = get_latest_balance_time(client=client, tickers=tickers, timestp_threshold=now_minus_120_days)
         
         if not too_old_balance_sheet:
             logger.info(f"There's no balance sheet retrived before {DAYS_TO_WAIT} days from now.")
@@ -110,19 +110,19 @@ def balance_sheet_extract():
         retries=0,
         retry_delay=timedelta(seconds=5)
     )
-    def balance_sheet_extract_task(tickets):
+    def balance_sheet_extract_task(tickers):
         """
         Task to get balance sheet and earnings data, extract useful info, and produce it to a Kafka topic.
         
         Args:
-            tickets (list): List of stock ticket symbols.
+            tickers (list): List of stock ticker symbols.
         """
         
-        if not tickets:
-            logger.error("*tickets* is NULL, no tickets to process.")
+        if not tickers:
+            logger.error("*tickers* is NULL, no tickers to process.")
             raise
         
-        if tickets[0] == 'all_up_to_date':
+        if tickers[0] == 'all_up_to_date':
             logger.info(f"There's no balance sheet retrived before {DAYS_TO_WAIT} days from now.")
             return
         
@@ -135,7 +135,7 @@ def balance_sheet_extract():
         
         # try-except is for logging reasons and to flush the successful messages even if there's an error
         try:
-            for ticket in tickets:
+            for ticker in tickers:
                 
                 earnings = 'None'
                 balance_sheet = 'None'
@@ -144,7 +144,7 @@ def balance_sheet_extract():
                 # Get the earnings and ratios
                 earnings_useful = ['MarketCapitalization', 'DilutedEPSTTM', 'PERatio', 'ForwardPE', 'EPS', 'RevenueTTM', 'QuarterlyRevenueGrowthYOY',
                                 'ProfitMargin', 'OperatingMarginTTM', 'Beta', 'PriceToSalesRatioTTM', 'PriceToBookRatio']
-                url_earnings = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticket}&apikey={API_KEY}'
+                url_earnings = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker}&apikey={API_KEY}'
                 earnings = requests.get(url_earnings).json()
                 # Keep just the info I'm interested in
                 earnings = {key: earnings.get(key) for key in earnings_useful}
@@ -154,7 +154,7 @@ def balance_sheet_extract():
                 balance_sheet_useful = ['totalAssets', 'cashAndCashEquivalentsAtCarryingValue', 'totalLiabilities', 'totalShareholderEquity',
                                         'retainedEarnings', 'cashAndShortTermInvestments', 'propertyPlantEquipment', 'commonStockSharesOutstanding',
                                         'longTermDebt', 'currentDebt', 'shortTermDebt']
-                balance_sheet_url = f'https://www.alphavantage.co/query?function=BALANCE_SHEET&symbol={ticket}&apikey={API_KEY}'
+                balance_sheet_url = f'https://www.alphavantage.co/query?function=BALANCE_SHEET&symbol={ticker}&apikey={API_KEY}'
                 balance_sheet = requests.get(balance_sheet_url).json()
                 # Get the last report
                 balance_sheet = balance_sheet['quarterlyReports'][0]
@@ -166,26 +166,26 @@ def balance_sheet_extract():
                 # Keep just the info I'm interested in
                 balance_sheet = {key: balance_sheet.get(key) for key in balance_sheet_useful}                
                 
-                logger.info(f"Successfully retrived info for: {ticket}")
+                logger.info(f"Successfully retrived info for: {ticker}")
                 
                 
                 balance_sheet_model = BalanceSheet(
-                    ticket=ticket.lower(),
+                    ticker=ticker.lower(),
                     timestp=int(datetime_fiscal_date.timestamp()),
                     earnings_ratios=earnings,
                     balance_sheet=balance_sheet
                 )
             
-                logger.info(f"Successfully processed balance_sheet for: {ticket}")
+                logger.info(f"Successfully processed balance_sheet for: {ticker}")
 
                 producer.produce(
                     topic=TOPIC_NAME,
-                    key=balance_sheet_model.ticket,
+                    key=balance_sheet_model.ticker,
                     value=balance_sheet_model,
                     on_delivery=GenralProducerCallback(balance_sheet_model)
                 )
                     
-                logger.info(f"Produced {ticket}'s balance sheet report to Kafka topic {TOPIC_NAME}.")
+                logger.info(f"Produced {ticker}'s balance sheet report to Kafka topic {TOPIC_NAME}.")
                 
                 # This will reduce the strain on the free service (tnx)
                 sleep(5)
@@ -222,8 +222,8 @@ def balance_sheet_extract():
     )
 
 
-    is_api_available = is_api_available_task(tickets[0])
-    is_too_early = is_too_early_task(tickets)
+    is_api_available = is_api_available_task(tickers[0])
+    is_too_early = is_too_early_task(tickers)
     balance_sheet = balance_sheet_extract_task(is_too_early)
     
     is_api_available >> [telegram_api_down, is_too_early]

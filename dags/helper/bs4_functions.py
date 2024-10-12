@@ -4,12 +4,12 @@ from time import sleep
 from random import choice
 
 
-def get_soup(logger, ticket, urls, **kwargs):
+def get_soup(logger, ticker, urls, **kwargs):
     """
     Fetch the content of a URL and parse it with BeautifulSoup.
         
     Args:
-        ticket (str): The stock ticker symbol.
+        ticker (str): The stock ticker symbol.
         logger (logging.Logger): An instance of the logging library.
         urls (list): a list of url to test.
         kwargs: Additional arguments to be used for requests.get().
@@ -27,10 +27,10 @@ def get_soup(logger, ticket, urls, **kwargs):
             success = True
             break
         except requests.HTTPError as http_err:
-            logger.error(f'Failed to retrieve content for ticket {ticket}, url {url}. Status code: {response.status_code}. Error: {http_err}')
+            logger.error(f'Failed to retrieve content for ticker {ticker}, url {url}. Status code: {response.status_code}. Error: {http_err}')
             # raise
         except Exception as err:
-            logger.error(f'An error occurred for ticket {ticket}, url {url}. Error: {err}')
+            logger.error(f'An error occurred for ticker {ticker}, url {url}. Error: {err}')
             # raise
     
     if success == False:

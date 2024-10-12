@@ -21,7 +21,7 @@ async def fetch_page(session, url):
         return None
 
 
-async def fetch_yahoo_article_content(session, link, title, ticket):
+async def fetch_yahoo_article_content(session, link, title, ticker):
     article_content = await fetch_page(session, link)
     print(f'Page fetched for the link {link}.')
     
@@ -34,7 +34,7 @@ async def fetch_yahoo_article_content(session, link, title, ticket):
             # This return the concatenation of all the text inside the paragraphs of the article
             article_content = "\n".join(p.get_text(strip=False) for p in body.find_all('p'))
             return Article(
-                ticket=ticket,
+                ticker=ticker,
                 timestp=int(datetime.now().timestamp()),
                 url=link,
                 title=title,
@@ -47,10 +47,10 @@ async def fetch_yahoo_article_content(session, link, title, ticket):
 
 
 # This return a list of tasks to run async
-async def fetch_yahoo(ticket, headers, cookies):
+async def fetch_yahoo(ticker, headers, cookies):
     
-    ticket = ticket.upper()
-    url = f'https://finance.yahoo.com/quote/{ticket}/news/'
+    ticker = ticker.upper()
+    url = f'https://finance.yahoo.com/quote/{ticker}/news/'
     async with aiohttp.ClientSession(headers=headers, cookies=cookies) as session:
         
         # Fetch the main page
@@ -74,8 +74,8 @@ async def fetch_yahoo(ticket, headers, cookies):
             link = article.get('href')
             
             # Check if the url is about an add and not about the stock
-            if ticket in title:
-                tasks.append(fetch_yahoo_article_content(session, link, title, ticket))
+            if ticker in title:
+                tasks.append(fetch_yahoo_article_content(session, link, title, ticker))
 
         # Process the tasks as they complete
         for task in asyncio.as_completed(tasks):

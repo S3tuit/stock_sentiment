@@ -12,7 +12,7 @@ def get_latest_articles(client, source):
 
     Returns:
         list[dict]: A list of dictionaries representing the latest articles for each stock.
-                    Each dictionary contains: "ticket", "title", "source"
+                    Each dictionary contains: "ticker", "title", "source"
     '''
 
     db = client.stock_test
@@ -23,12 +23,12 @@ def get_latest_articles(client, source):
         {"$match": {"source": source}},  # Match the source
         {"$sort": {"timestamp": -1}},  # Sort by timestamp in descending order (latest first)
         {"$group": {
-            "_id": "$ticket",  # Group by ticket
-            "ticket": {"$first": "$ticket"},
+            "_id": "$ticker",  # Group by ticker
+            "ticker": {"$first": "$ticker"},
             "title": {"$first": "$title"},  # Get the title of the latest article
             "source": {"$first": "$source"}
         }},
-        {"$project": {"_id": 0, "ticket": 1, "title": 1, "source": 1}}  # Exclude _id field
+        {"$project": {"_id": 0, "ticker": 1, "title": 1, "source": 1}}  # Exclude _id field
     ]
 
     latest_articles = list(articles_collection.aggregate(pipeline))
@@ -42,7 +42,7 @@ def upsert_articles(article_entities, client):
 
     Args:
         article_entities (list[dict]): A list of dictionaries representing articles.
-                                        Each dictionary should contain: "ticket", "title", "source"
+                                        Each dictionary should contain: "ticker", "title", "source"
         client (MongoClient): The MongoDB client used to connect to the database.
     
     Returns:
@@ -56,7 +56,7 @@ def upsert_articles(article_entities, client):
     
     for article in article_entities:
         cache_collection.update_one(
-            {"ticket": article["ticket"], "source": article["source"]},  # Match criteria
+            {"ticker": article["ticker"], "source": article["source"]},  # Match criteria
             {"$set": {
                 "title": article["title"]
             }},
@@ -78,9 +78,9 @@ def get_cached_articles(client, source):
     db = client.stock_test
     collection = db.articles_cache
 
-    mongo_result = collection.find({"source": source}, {"ticket": 1, "title": 1, '_id': 0})
+    mongo_result = collection.find({"source": source}, {"ticker": 1, "title": 1, '_id': 0})
         
-    cached_articles = {article['ticket']: article['title'] for article in mongo_result}
+    cached_articles = {article['ticker']: article['title'] for article in mongo_result}
         
     return cached_articles        
 
@@ -104,22 +104,22 @@ def get_latest_balance_time(client, tickers, timestp_threshold):
     balance_sheet_collection = db.balance_sheet
 
     pipeline = [
-        {"$match": {"ticket": {"$in": tickers}}},
-        {"$sort": {"ticket": 1, "timestp": -1}},  # Sort by ticket and then by timestamp (most recent first)
+        {"$match": {"ticker": {"$in": tickers}}},
+        {"$sort": {"ticker": 1, "timestp": -1}},  # Sort by ticker and then by timestamp (most recent first)
         {"$group": {
-            "_id": "$ticket",
+            "_id": "$ticker",
             "latest_timestp": {"$first": "$timestp"} # Get the timestp of the latest balance sheet
         }},
         {"$match": {"latest_timestp": {"$lt": timestp_threshold}}}, # Retrieve the timestp only if it's lower than timestp_threshold
         {"$project": {
             "_id": 0,
-            "ticket": "$_id",
+            "ticker": "$_id",
             "timestp": "$latest_timestp"
         }}
     ]
 
     latest_balances = list(balance_sheet_collection.aggregate(pipeline))
     
-    too_old_balance_sheet = [stock['ticket'] for stock in latest_balances]
+    too_old_balance_sheet = [stock['ticker'] for stock in latest_balances]
     
     return too_old_balance_sheet
