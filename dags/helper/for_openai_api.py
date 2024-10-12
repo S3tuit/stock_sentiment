@@ -6,14 +6,14 @@ from time import sleep
 from datetime import datetime, timedelta
 
 
-def get_info_from_mongo(mongo_hook, collection, ticket, db='stock_test', limit=1):
+def get_info_from_mongo(mongo_hook, collection, ticker, db='stock_test', limit=1):
     '''
-    Retrives data from Mongo based on the query {"ticket": ticket} and sorted by timestp descending.
+    Retrives data from Mongo based on the query {"ticker": ticker} and sorted by timestp descending.
     
     Args:
         mongo_hook(MongoHook): Hook from Airflow.
         collection(str): Mongo collection.
-        ticket(str): stock ticket.
+        ticker(str): stock ticker.
         db(str): Mogno db.
         limit(int): How many documents to retrieve.
         
@@ -21,11 +21,11 @@ def get_info_from_mongo(mongo_hook, collection, ticket, db='stock_test', limit=1
         (list): a list containing the result/s.
     '''
     collection = mongo_hook.get_collection(mongo_collection=collection, mongo_db=db)
-    result = collection.find({"ticket": ticket}).sort('timestp', -1).limit(limit)
+    result = collection.find({"ticker": ticker}).sort('timestp', -1).limit(limit)
     return list(result)
 
 
-def get_sentiment(openai_message, api_key, ticket, logger, max_retries=3, retry_delay=2):
+def get_sentiment(openai_message, api_key, ticker, logger, max_retries=3, retry_delay=2):
     '''
     Send a message about a stock to the OpenAI API. The API analyzes the message and retrieves the sentiment.
     This version of openai doesn't provide a structured output, this is a workaround.
@@ -33,7 +33,7 @@ def get_sentiment(openai_message, api_key, ticket, logger, max_retries=3, retry_
     Args:
         openai_message(str): The message about the stock for analysis.
         api_key(str): API key to authenticate with OpenAI.
-        ticket(str): Stock ticker symbol.
+        ticker(str): Stock ticker symbol.
         logger(logging.Logger): Logger for tracking retries, warnings, and errors.
         max_retries(int): Maximum number of retries if the response format is incorrect (default is 3).
         retry_delay(int): Delay (in seconds) between retries (default is 2 seconds).
@@ -82,7 +82,7 @@ def get_sentiment(openai_message, api_key, ticket, logger, max_retries=3, retry_
                 next_month_prediction=next_month_prediction,
                 next_year_prediction=next_year_prediction,
                 reasoning=reasoning,
-                ticket=ticket.lower(),
+                ticker=ticker.lower(),
                 timestp=int(midnight_today.timestamp())
             )
             return sentiment
@@ -97,5 +97,5 @@ def get_sentiment(openai_message, api_key, ticket, logger, max_retries=3, retry_
         sleep(retry_delay)
 
     # If max retries exceeded, log an error and raise an exception
-    logger.error(f"Max retries exceeded. Unable to get a valid response from OpenAI for ticket: {ticket}.")
+    logger.error(f"Max retries exceeded. Unable to get a valid response from OpenAI for ticker: {ticker}.")
     raise ValueError(f"Failed to retrieve a valid sentiment after {max_retries} attempts.")

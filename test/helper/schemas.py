@@ -3,11 +3,11 @@ article_schema_v1 = """
 {
     "name": "article_schema_v1",
     "namespace": "com.article.schema.v1",
-    "doc": "The key is TICKET. The first version of my schema for the extracted articles.",
+    "doc": "The key is TICKER. The first version of my schema for the extracted articles.",
     "type": "record",
     "fields": [
         {
-            "name": "ticket",
+            "name": "ticker",
             "type": "string"
         },
         {
@@ -54,11 +54,11 @@ prices_schema_v1 = """
 {
     "name": "prices_schema_v1",
     "namespace": "com.prices.schema.v1",
-    "doc": "Schema for the Prices record containing ticket information, timestamp, price and volume data, and technical analysis indicators. The key is ticket.",
+    "doc": "Schema for the Prices record containing ticker information, timestamp, price and volume data, and technical analysis indicators. The key is ticker.",
     "type": "record",
     "fields": [
         {
-            "name": "ticket",
+            "name": "ticker",
             "type": "string"
         },
         {
@@ -90,11 +90,11 @@ balance_sheet_schema_v1 = """
 {
     "name": "prices_schema_v1",
     "namespace": "com.prices.schema.v1",
-    "doc": "Schema for the BalanceSheet model. The key is ticket.",
+    "doc": "Schema for the BalanceSheet model. The key is ticker.",
     "type": "record",
     "fields": [
         {
-            "name": "ticket",
+            "name": "ticker",
             "type": "string"
         },
         {

@@ -9,7 +9,7 @@ use stock_test;
 
 
 db.articles_test.createIndex(
-   { ticket: 1, url: 1 },
+   { ticker: 1, url: 1 },
    { unique: true, name: "articles_test_uniq_ticket_url" }
 );
 db.articles_test.createIndex(
@@ -23,25 +23,25 @@ db.articles_test.createIndex(
 
 
 db.balance_sheet.createIndex(
-   { ticket: 1, timestp: -1 },
+   { ticker: 1, timestp: -1 },
    { unique: true, name: "balance_sheet_test_ticket_tmstp" }
 );
 
 
 db.price_info.createIndex(
-   { ticket: 1, timestp: -1 },
+   { ticker: 1, timestp: -1 },
    { unique: true, name: "price_test_ticket_tmstp" }
 );
 
 
 db.stock_sentiment.createIndex(
-   { ticket: 1, timestp: -1 },
+   { ticker: 1, timestp: -1 },
    { unique: true, name: "sentiment_test_ticket_tmstp" }
 );
 
 
 db.articles_cache.createIndex(
-  { "ticket": 1, "source": 1 },
+  { "ticker": 1, "source": 1 },
   { unique: true, name: "articles_cache_ticket_source" }
 );
 db.articles_cache.createIndex(

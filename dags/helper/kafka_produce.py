@@ -43,7 +43,7 @@ class ArticleProducerCallback:
         
     def __call__(self, err, msg):
         if err:
-            print(f"Failed to produce article on url: {self.article.url} \nFor the stock: {self.article.ticket}", exc_info=err)
+            print(f"Failed to produce article on url: {self.article.url} \nFor the stock: {self.article.ticker}", exc_info=err)
         else:
             print(f"""
                         __________________________________
@@ -60,7 +60,7 @@ class GenralProducerCallback:
         
     def __call__(self, err, msg):
         if err:
-            print(f"Failed to produce {self.model.__class__.__name__} for the ticket: {self.model.ticket}", exc_info=err)
+            print(f"Failed to produce {self.model.__class__.__name__} for the ticker: {self.model.ticker}", exc_info=err)
         else:
             print(f"""
                         __________________________________

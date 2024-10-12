@@ -3,7 +3,7 @@ from typing import Optional
 
 # Class used for the topic test.articles
 class Article(BaseModel):
-    ticket: Optional[str] = None
+    ticker: Optional[str] = None
     url: Optional[str] = None
     title: Optional[str] = None
     article_body: Optional[str] = None
@@ -11,13 +11,13 @@ class Article(BaseModel):
 
 # Class used for the topic test.price_info
 class Prices(BaseModel):
-    ticket: str
+    ticker: str
     timestp: int    # in unix time
     price_n_volume: dict    # daily price and volume
     technicals: dict    # technical analysis, {indicator: value}
 
 class BalanceSheet(BaseModel):
-    ticket: str
+    ticker: str
     timestp: int    # in unix time
     earnings_ratios: dict    # earnings and ratios relative to them (like PS)
     balance_sheet: dict

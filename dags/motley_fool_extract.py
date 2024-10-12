@@ -13,7 +13,7 @@ from helper import schemas
 from helper.bs4_functions import get_soup, wait_and_rotate_agent
 from helper.cached_mongo import get_cached_articles
 
-from tickets.tickets import TICKETS, NASDAQ, NYSE
+from tickers.tickers import TICKERS, NASDAQ, NYSE
 
 
 # Constants for Kafka
@@ -50,46 +50,46 @@ def motley_fool_extract():
         retry_delay=timedelta(seconds=5),
         depends_on_past=False
     )
-    def get_news_links_task(tickets):
+    def get_news_links_task(tickers):
         """
         Task to retrieve news links for specific stocks from Motley Fool.
         
         Args:
-            tickets (dict): A dictionary where the key is the stock ticker symbol, and
+            tickers (dict): A dictionary where the key is the stock ticker symbol, and
                             the value is the exchange where it's listed (NASDAQ, NYSE).
         
         Returns:
-            list: A list of dictionaries containing article metadata (url, title, ticket, duplicate).
+            list: A list of dictionaries containing article metadata (url, title, ticker, duplicate).
         """
         article_basic_info = []
         headers = wait_and_rotate_agent(wait_time=0)
         
-        # Change the link to scrape based on the exchange the ticket is listed on
-        for ticket in list(tickets.keys())[:2]:
-            if tickets[ticket] == NASDAQ:
-                url = f'https://www.fool.com/quote/nasdaq/{ticket}/'
+        # Change the link to scrape based on the exchange the ticker is listed on
+        for ticker in list(tickers.keys())[:2]:
+            if tickers[ticker] == NASDAQ:
+                url = f'https://www.fool.com/quote/nasdaq/{ticker}/'
             else:
-                url = f'https://www.fool.com/quote/nyse/{ticket}/'
+                url = f'https://www.fool.com/quote/nyse/{ticker}/'
             
             # For logging
             try:
-                soup = get_soup(logger=logger, ticket=ticket, urls=[url], headers=headers)
+                soup = get_soup(logger=logger, ticker=ticker, urls=[url], headers=headers)
                 
                 # Locate the section on the main page with the article links
                 news_div = soup.find(id="quote-news-analysis")
                 
-                # get the title, link and ticket of the first article, that's why there's [:1] at the end
+                # get the title, link and ticker of the first article, that's why there's [:1] at the end
                 article_basic_info += [{'url': a.get('href'),
                                         'title': a.get('data-track-link'),
-                                        'ticket': ticket,
+                                        'ticker': ticker,
                                         'duplicate': False} for a in news_div.find_all('a')[:1]]
                     
-                # There's no check to see if the ticket is in the title because fool.com doesn't show ads in that div.
+                # There's no check to see if the ticker is in the title because fool.com doesn't show ads in that div.
                         
-                logger.info(f"Successfully retrieved article link for ticket: {ticket}.")
+                logger.info(f"Successfully retrieved article link for ticker: {ticker}.")
             
             except Exception as e:
-                logger.error(f"Failed to retrieve articles for {ticket}. Exception: {e}")
+                logger.error(f"Failed to retrieve articles for {ticker}. Exception: {e}")
                 logger.error(f'The html sctructure is: {soup}')
                 raise
             
@@ -110,7 +110,7 @@ def motley_fool_extract():
         Checks if the articles retrieved from the API are already in the cache.
 
         Args:
-            articles_metadata (list): A list of article metadata (url, title, ticket, duplicate).
+            articles_metadata (list): A list of article metadata (url, title, ticker, duplicate).
         
         Returns:
             list: Updated list of article metadata, marking duplicates.
@@ -121,7 +121,7 @@ def motley_fool_extract():
         cached_articles = get_cached_articles(client=client, source=SOURCE)
 
         for article in article_basic_info:
-            cached_title = cached_articles.get(article['ticket'].lower())
+            cached_title = cached_articles.get(article['ticker'].lower())
             if article['title'] == cached_title:
                 article['duplicate'] = True
 
@@ -139,7 +139,7 @@ def motley_fool_extract():
         Process the article metadata, extract content, and produce it to Kafka.
         
         Args:
-            article_basic_info (list): List of article metadata (url, title, ticket, duplicate).
+            article_basic_info (list): List of article metadata (url, title, ticker, duplicate).
         """
 
         if not article_basic_info:
@@ -162,7 +162,7 @@ def motley_fool_extract():
                 
                 if not basic_article['duplicate']:
                     url = 'https://www.fool.com/' + basic_article['url']
-                    soup = get_soup(logger=logger, ticket=basic_article['ticket'], urls=[url], headers=headers)
+                    soup = get_soup(logger=logger, ticker=basic_article['ticker'], urls=[url], headers=headers)
                     logger.info(f'Request made for: {url}')
                 
                     article_body = soup.select('div.article-body')
@@ -173,7 +173,7 @@ def motley_fool_extract():
                         
                         if article_text:
                             article = Article(
-                                ticket=basic_article['ticket'].lower(),
+                                ticker=basic_article['ticker'].lower(),
                                 url=url,
                                 title= basic_article['title'],
                                 article_body= article_text,
@@ -183,7 +183,7 @@ def motley_fool_extract():
                             
                             producer.produce(
                                 topic=TOPIC_NAME,
-                                key=article.ticket,
+                                key=article.ticker,
                                 value=article,
                                 on_delivery=ArticleProducerCallback(article)
                             )
@@ -198,7 +198,7 @@ def motley_fool_extract():
                     headers = wait_and_rotate_agent()
                     
                 else:
-                    logger.info(f'Found a duplicate article for {basic_article["ticket"]} -- {basic_article["title"]}')
+                    logger.info(f'Found a duplicate article for {basic_article["ticker"]} -- {basic_article["title"]}')
                 
         except Exception as e:
             logger.error('-------------------------------------------------')
@@ -231,7 +231,7 @@ def motley_fool_extract():
         trigger_rule='all_failed'
     )
 
-    get_news_links = get_news_links_task(TICKETS)
+    get_news_links = get_news_links_task(TICKERS)
     check_for_duplicates = check_for_duplicates_task(get_news_links)
     process_links = process_links_task(check_for_duplicates)
     
