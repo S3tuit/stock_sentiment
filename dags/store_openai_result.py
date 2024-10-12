@@ -129,11 +129,25 @@ def store_openai_result():
         trigger_rule='all_failed'
     )
     
+    @task(
+        task_id='mark_dag_as_failed',
+        retries=0,
+        retry_delay=timedelta(seconds=5),
+        trigger_rule='one_success'
+    )
+    def mark_dag_as_failed_task():
+        """
+        Task to mark the dag as failed.
+        """
+        raise
+    
 
 
     process_ticket = process_ticket_task.expand(ticker=tickers)
+    mark_dag_as_failed = mark_dag_as_failed_task()
     
     process_ticket >> telegram_failure_msg
+    telegram_failure_msg >> mark_dag_as_failed
     
 
 

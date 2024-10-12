@@ -230,13 +230,27 @@ def motley_fool_extract():
         text='''I couldn't process some or all articles in `motley_fool_extract` DAG.''',
         trigger_rule='all_failed'
     )
+    
+    @task(
+        task_id='mark_dag_as_failed',
+        retries=0,
+        retry_delay=timedelta(seconds=5),
+        trigger_rule='one_success'
+    )
+    def mark_dag_as_failed_task():
+        """
+        Task to mark the dag as failed.
+        """
+        raise
 
     get_news_links = get_news_links_task(TICKERS)
     check_for_duplicates = check_for_duplicates_task(get_news_links)
     process_links = process_links_task(check_for_duplicates)
+    mark_dag_as_failed = mark_dag_as_failed_task()
     
     get_news_links >> [check_for_duplicates, telegram_failure_msg_extract]
     check_for_duplicates >> [process_links, telegram_failure_msg_process]
     process_links >> telegram_failure_msg_process
+    [telegram_failure_msg_extract, telegram_failure_msg_process] >> mark_dag_as_failed
 
 motley_fool_extract()

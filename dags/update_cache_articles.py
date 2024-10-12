@@ -109,13 +109,27 @@ def update_cache_articles():
         text='''Something went wrong during the upsert process. Please review the logs for details.''',
         trigger_rule='one_failed'
     )
+    
+    @task(
+        task_id='mark_dag_as_failed',
+        retries=0,
+        retry_delay=timedelta(seconds=5),
+        trigger_rule='one_success'
+    )
+    def mark_dag_as_failed_task():
+        """
+        Task to mark the dag as failed.
+        """
+        raise
 
 
     is_mongo_up = is_mongo_up_task()
     update_cache = update_cache_task()
+    mark_dag_as_failed = mark_dag_as_failed_task()
     
     is_mongo_up >> [update_cache, mongo_down]
     update_cache >> unexpected_error_upsert
+    [mongo_down, unexpected_error_upsert] >> mark_dag_as_failed
 
 
 update_cache_articles()
