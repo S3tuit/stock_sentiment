@@ -247,15 +247,29 @@ def seeking_alpha_extract():
         Idk what happened :(.''',
         trigger_rule='all_failed'
     )
+    
+    @task(
+        task_id='mark_dag_as_failed',
+        retries=0,
+        retry_delay=timedelta(seconds=5),
+        trigger_rule='one_success'
+    )
+    def mark_dag_as_failed_task():
+        """
+        Task to mark the dag as failed.
+        """
+        raise
 
 
     get_news_links = get_news_links_task(tickers)
     check_for_duplicate = check_for_duplicate_task(get_news_links)
     process_links = process_links_task(check_for_duplicate)
+    mark_dag_as_failed = mark_dag_as_failed_task()
     
     get_news_links >> [check_for_duplicate, telegram_failure_extract_msg]
     check_for_duplicate >> [process_links, telegram_failure_process_msg]
     process_links >> telegram_failure_process_msg
+    [telegram_failure_extract_msg, telegram_failure_process_msg] >> mark_dag_as_failed
 
 
 seeking_alpha_extract()

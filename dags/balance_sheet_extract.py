@@ -68,7 +68,7 @@ def balance_sheet_extract():
         Returns:
             task: 'balance_sheet_extract' if the api is up, 'telegram_api_down' otherwise.
         """
-
+        
         try:
             url_to_test = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticker}&apikey={API_KEY}'
             response = requests.get(url_to_test)
@@ -220,15 +220,29 @@ def balance_sheet_extract():
         The dag that failed is balance_sheet_extract. The failed task is balance_sheet_extract_task.''',
         trigger_rule='all_failed'
     )
+    
+    @task(
+        task_id='mark_dag_as_failed',
+        retries=0,
+        retry_delay=timedelta(seconds=5),
+        trigger_rule='one_success'
+    )
+    def mark_dag_as_failed_task():
+        """
+        Task to mark the dag as failed.
+        """
+        raise
 
 
     is_api_available = is_api_available_task(tickers[0])
     is_too_early = is_too_early_task(tickers)
     balance_sheet = balance_sheet_extract_task(is_too_early)
+    mark_dag_as_failed = mark_dag_as_failed_task()
     
     is_api_available >> [telegram_api_down, is_too_early]
     is_too_early >> [balance_sheet, telegram_failure_msg]
     balance_sheet >> telegram_failure_msg
+    [telegram_failure_msg, telegram_api_down] >> mark_dag_as_failed
 
 
 balance_sheet_extract()

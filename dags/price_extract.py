@@ -179,13 +179,27 @@ def price_extract():
         The dag that failed is price_extract. The failed task is get_the_prices_task.''',
         trigger_rule='all_failed'
     )
+    
+    @task(
+        task_id='mark_dag_as_failed',
+        retries=0,
+        retry_delay=timedelta(seconds=5),
+        trigger_rule='one_success'
+    )
+    def mark_dag_as_failed_task():
+        """
+        Task to mark the dag as failed.
+        """
+        raise
 
 
     is_api_available = is_api_available_task(tickers[0])
     get_the_prices = get_the_prices_task(tickers)
+    mark_dag_as_failed = mark_dag_as_failed_task()
     
     is_api_available >> [telegram_api_down, get_the_prices]
     get_the_prices >> telegram_failure_msg
+    [telegram_api_down, telegram_failure_msg] >> mark_dag_as_failed
 
 
 price_extract()
