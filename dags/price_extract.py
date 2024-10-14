@@ -165,18 +165,14 @@ def price_extract():
         task_id='telegram_api_down',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''I couldn't extract price info from the AlphaVantage API.
-        
-        The API is unavailable or the key is changed.'''
+        text='''The dag price_extract failed. The task that failed is is_api_available.'''
     )
 
     telegram_failure_msg = TelegramOperator(
         task_id='telegram_failure_msg',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''Something unexpected happened when trying to get the daily price via AlphaVantage API.
-        
-        The dag that failed is price_extract. The failed task is get_the_prices_task.''',
+        text='''The dag price_extract failed. The task that failed is get_the_prices.''',
         trigger_rule='all_failed'
     )
     

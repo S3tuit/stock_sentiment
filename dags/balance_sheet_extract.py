@@ -206,18 +206,14 @@ def balance_sheet_extract():
         task_id='telegram_api_down',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''I couldn't extract balance_sheet info from the AlphaVantage API.
-        
-        The API is unavailable or the key is changed.'''
+        text='''The dag balance_sheet_extract failed. The task that failed is balance_sheet_extract.'''
     )
 
     telegram_failure_msg = TelegramOperator(
         task_id='telegram_failure_msg',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''Something unexpected happened when trying to get balance sheet data via AlphaVantage API.
-        
-        The dag that failed is balance_sheet_extract. The failed task is balance_sheet_extract_task.''',
+        text='''The dag balance_sheet_extract failed. The task that failed is is_too_early.''',
         trigger_rule='all_failed'
     )
     

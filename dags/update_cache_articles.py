@@ -80,7 +80,7 @@ def update_cache_articles():
     )
     def update_cache_task():
         """
-        Retrieves the latest articles from Seeking Alpha and performs an upsert in MongoDB's cache.
+        Retrieves the latest articles from various sources and performs an upsert in MongoDB's cache.
         """
         
         mongo_hook = MongoHook(conn_id='mongo_test')
@@ -98,7 +98,7 @@ def update_cache_articles():
         task_id='mongo_down',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''Oops, I couldn't connect to MongoDB. Please check the database status.''',
+        text='''The dag update_cache_articles failed. That's likely because MongoDB is down.''',
         trigger_rule='one_failed'
     )
 
@@ -106,7 +106,7 @@ def update_cache_articles():
         task_id='unexpected_error_upsert',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''Something went wrong during the upsert process. Please review the logs for details.''',
+        text='''The dag update_cache_articles failed. The task that failed is update_cache.''',
         trigger_rule='one_failed'
     )
     

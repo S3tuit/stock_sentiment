@@ -228,11 +228,7 @@ def seeking_alpha_extract():
         task_id='telegram_failure_extract_msg',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''I couldn't extract the link fron the SeekingAlpha API.
-        
-        The dag that failed is seeking_alpha_extract. The failed task is get_news_links_task.
-        
-        Probably, the API key is changed.''',
+        text='''The dag seeking_alpha_extract failed. The task that failed is get_news_links.''',
         trigger_rule='all_failed'
     )
 
@@ -240,11 +236,7 @@ def seeking_alpha_extract():
         task_id='telegram_failure_process_msg',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''I couldn't get the articles body fron the SeekingAlpha API.
-        
-        The dag that failed is seeking_alpha_extract. The failed task is process_links_task.
-        
-        Idk what happened :(.''',
+        text='''The dag seeking_alpha_extract failed. The task that failed is check_for_duplicate or process_links.''',
         trigger_rule='all_failed'
     )
     

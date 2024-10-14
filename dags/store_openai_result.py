@@ -127,9 +127,7 @@ def store_openai_result():
         task_id='telegram_failure_msg',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''Hey there, looks like I ran into some trouble getting sentiment data for all the tickers.
-        
-        Something didn’t go as planned.''',
+        text='''The dag store_openai_result failed. The task that failed is process_ticket.''',
         trigger_rule='all_failed'
     )
     

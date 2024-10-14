@@ -219,7 +219,7 @@ def motley_fool_extract():
         task_id='telegram_failure_msg_extract',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''I couldn't extract links from Motley Fool in `motley_fool_extract` DAG.''',
+        text='''The dag motley_fool_extract failed. The task that failed is get_news_links.''',
         trigger_rule='all_failed'
     )
     
@@ -227,7 +227,7 @@ def motley_fool_extract():
         task_id='telegram_failure_msg_process',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''I couldn't process some or all articles in `motley_fool_extract` DAG.''',
+        text='''The dag motley_fool_extract failed. The task that failed is check_for_duplicates or process_links.''',
         trigger_rule='all_failed'
     )
     
