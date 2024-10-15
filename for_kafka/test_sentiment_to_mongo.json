@@ -4,7 +4,7 @@
         "connection.uri": "mongodb://peppa:peppa@mongodb:27017",
         "database": "stock_test",
         "collection": "stock_sentiment",
-        "topics": "test.stock_sentiment",
+        "topics": "test.openai_sentiment",
         "connector.class": "com.mongodb.kafka.connect.MongoSinkConnector",
         "tasks.max": 1,
         "key.converter": "org.apache.kafka.connect.storage.StringConverter",

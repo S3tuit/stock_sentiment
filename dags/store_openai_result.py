@@ -23,7 +23,7 @@ BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 chat_id = Variable.get("TELEGRAM_CHAT")
 
 # TICKERS is a dict -> {stock_name: exchange}
-tickers = list(TICKERS.keys())
+tickers = list(TICKERS.keys())[:1]
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,7 +37,11 @@ OPENAI_API_KEY = Variable.get("OPENAI_API_KEY")
     schedule="0 13 * * 6",  # Runs each Saturday at 13 UTC
     start_date=datetime(2024, 10, 5),
     catchup=True,
-    tags=["stock_sentiment"]
+    tags=["stock_sentiment"],
+    max_active_tasks=1,  # This limits the DAG to run one task at a time
+    default_args={
+        "max_active_tis_per_dag": 1  # This ensures only one task instance runs at any point, otherwise pc crushes :(
+    }
 )
 def store_openai_result():
     """
@@ -52,7 +56,7 @@ def store_openai_result():
     def process_ticket_task(ticker):
         """
         This retrives info about a stock ticker (sentiment, prices, balance sheet) and send it to
-        openai for an analysis. The result is produces to kafka
+        openai for an analysis. The result is produces to kafka.
         
         Args:
             ticker (str): A of stock ticker symbol.
@@ -70,7 +74,7 @@ def store_openai_result():
         articles = get_info_from_mongo(collection='articles_test', ticker=ticker.lower(), limit=3, mongo_hook=mongo_hook)
         logger.info(f'Successfully retrived articles data for {ticker}')
         
-        prices = get_info_from_mongo(collection='price_info', ticker=ticker.lower(), limit=1, mongo_hook=mongo_hook)
+        prices = get_info_from_mongo(collection='price_info', ticker=ticker.lower(), limit=6, mongo_hook=mongo_hook)
         logger.info(f'Successfully retrived prices data for {ticker}')
         
         balance_sheet = get_info_from_mongo(collection='balance_sheet', ticker=ticker.lower(), limit=1, mongo_hook=mongo_hook)
@@ -85,6 +89,9 @@ def store_openai_result():
         # Extract the useful info from prices
         price_n_volume = prices[0]['price_n_volume']
         technicals = prices[0]['technicals']
+        # Usually 5 trading days ago is a week ago
+        price_n_volume_last_week = prices[5]['price_n_volume']
+        technicals_last_week = prices[5]['technicals']
         
         # Extract the useful info from the balance sheet
         earnings_ratios = balance_sheet[0]['earnings_ratios']
@@ -100,10 +107,12 @@ def store_openai_result():
         Articles: {article_bodies}
         Prices: {price_n_volume}
         Technicals: {technicals}
+        Last week prices: {price_n_volume_last_week}
+        Technicals: {technicals_last_week}
         Ratios: {earnings_ratios}
         Balance sheet: {balance_sheet}
         '''
-        
+
         sentiment = get_sentiment(openai_message=openai_message, api_key=OPENAI_API_KEY, ticker=ticker, logger=logger)
         logger.info(f'Successfully retrived sentiment data for {ticker}')
             
@@ -123,9 +132,7 @@ def store_openai_result():
         task_id='telegram_failure_msg',
         telegram_conn_id='telegram_conn',
         chat_id=chat_id,
-        text='''Hey there, looks like I ran into some trouble getting sentiment data for all the tickers.
-        
-        Something didn’t go as planned.''',
+        text='''The dag store_openai_result failed. The task that failed is process_ticket.''',
         trigger_rule='all_failed'
     )
     

@@ -47,7 +47,7 @@ def get_sentiment(openai_message, api_key, ticker, logger, max_retries=3, retry_
 
     client = OpenAI(api_key=api_key)
     system_role = '''You're now the best stock analyzer.
-    Respond using this format: "next_month_prediction": your_prediction, "next_year_prediction": your_prediction, "reasoning": "your_reasoning".'''
+    Respond using this format: Next Month Prediction: your_prediction, Next Year Prediction: your_prediction, Reasoning: your_reasoning.'''
     
     retries = 0
     
@@ -66,10 +66,11 @@ def get_sentiment(openai_message, api_key, ticker, logger, max_retries=3, retry_
             
             response_openai = completion.choices[0].message.content
             
-            # Regular expressions to capture the desired values
-            next_month = re.search(r'"next_month_prediction":\s*"?([\d.]+)', response_openai).group(1)
-            next_year = re.search(r'"next_year_prediction":\s*"?([\d.]+)', response_openai).group(1)
-            reasoning = re.search(r'"reasoning":\s*"?([^"]+)"', response_openai).group(1)
+            # Regular expressions to capture the desired values:
+            # Match all the number and . after word: whitespaces, 0 or more "*$.
+            next_month = re.search(r'Next Month Prediction:\s*["*$]*([\d.]+)', response_openai, re.IGNORECASE).group(1)
+            next_year = re.search(r'Next Year Prediction:\s*["*$]*([\d.]+)', response_openai, re.IGNORECASE).group(1)
+            reasoning = re.search(r'Reasoning:\s*[*"#]*\s*(.*)', response_openai, re.IGNORECASE).group(1)
 
             next_month_prediction = float(next_month)
             next_year_prediction = float(next_year)
@@ -92,9 +93,10 @@ def get_sentiment(openai_message, api_key, ticker, logger, max_retries=3, retry_
             logger.warning(f"Attempt {retries + 1} failed: {str(e)}")
             logger.warning(f"Here was the response from openai API: {response_openai}")
         
-        # Increment retry count and sleep before retrying
-        retries += 1
-        sleep(retry_delay)
+        finally:
+            # Increment retry count and sleep before retrying
+            retries += 1
+            sleep(retry_delay)
 
     # If max retries exceeded, log an error and raise an exception
     logger.error(f"Max retries exceeded. Unable to get a valid response from OpenAI for ticker: {ticker}.")
