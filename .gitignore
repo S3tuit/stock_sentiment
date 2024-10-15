@@ -12,6 +12,10 @@ __pycache__/
 # Vscode
 .vscode
 
+# Personal test
+_testing*
+_testing/
+
 # Airflow
 plugins/
 logs/
