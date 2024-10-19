@@ -119,6 +119,9 @@ def price_extract():
             except Exception as e:
                 logger.error(e)
                 logger.error(f'The daily price sctructure is: {daily_price}')
+                
+                producer.flush()
+                logger.info("Kafka producer flushed the messages produced.")
                 raise
             
             try:
@@ -131,6 +134,9 @@ def price_extract():
             except Exception as e:
                 logger.error(e)
                 logger.error(f'The technicals sctructure is: {technicals}')
+                
+                producer.flush()
+                logger.info("Kafka producer flushed the messages produced.")
                 raise
             
             logger.info(f"Successfully retrived info for: {ticker}")

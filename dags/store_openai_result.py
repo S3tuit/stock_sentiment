@@ -23,7 +23,7 @@ BOOTSTRAP_SERVERS = Variable.get("BOOTSTRAP_SERVERS")
 chat_id = Variable.get("TELEGRAM_CHAT")
 
 # TICKERS is a dict -> {stock_name: exchange}
-tickers = list(TICKERS.keys())[:1]
+tickers = list(TICKERS.keys())
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
