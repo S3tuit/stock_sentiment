@@ -104,67 +104,60 @@ def price_extract():
         
         for ticker in tickers:
             
-            # For logging 
+            # try-except-finally is for logging purpose and to make sure all the successful messages will be produced even if there's an error 
             try:
                 daily_price = 'None'
+                technicals = 'None'
+                
                 # Get the price and volume of the last trading day
                 url_daily_price = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticker}&apikey={API_KEY}'
                 daily_price = requests.get(url_daily_price).json()
                 daily_price = daily_price['Global Quote']
-                
                 # Convert the last trading day into a datetime.datetime, next it'll become unix time
                 trading_day = daily_price['07. latest trading day']
                 datetime_trading_day = datetime.strptime(trading_day, "%Y-%m-%d")
             
-            except Exception as e:
-                logger.error(e)
-                logger.error(f'The daily price sctructure is: {daily_price}')
-                
-                producer.flush()
-                logger.info("Kafka producer flushed the messages produced.")
-                raise
             
-            try:
-                technicals = 'None'
                 # Get technical values of the last trading day and keep just the useful (for this purpose) ones
                 technicals_useful = ['52WeekHigh', '52WeekLow', '50DayMovingAverage', '200DayMovingAverage']
                 url_technicals = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker}&apikey={API_KEY}'
                 technicals = requests.get(url_technicals).json()
                 technicals = {key: technicals.get(key) for key in technicals_useful}
+                
+                logger.info(f"Successfully retrived info for: {ticker}")
+                
+                
+                price = Prices(
+                    ticker=ticker.lower(),
+                    timestp=int(datetime_trading_day.timestamp()),
+                    price_n_volume=daily_price,
+                    technicals=technicals
+                )
+            
+                logger.info(f"Successfully processed price for: {ticker}")
+
+                producer.produce(
+                    topic=TOPIC_NAME,
+                    key=price.ticker,
+                    value=price,
+                    on_delivery=GenralProducerCallback(price)
+                )
+                    
+                logger.info(f"Produced price info about {ticker} to Kafka topic {TOPIC_NAME}.")
+                
+                # This will reduce the strain on the free service (tnx)
+                sleep(1)
+                
             except Exception as e:
                 logger.error(e)
                 logger.error(f'The technicals sctructure is: {technicals}')
-                
-                producer.flush()
-                logger.info("Kafka producer flushed the messages produced.")
+                logger.error(f'The daily price sctructure is: {daily_price}')
+
                 raise
             
-            logger.info(f"Successfully retrived info for: {ticker}")
-            
-            
-            price = Prices(
-                ticker=ticker.lower(),
-                timestp=int(datetime_trading_day.timestamp()),
-                price_n_volume=daily_price,
-                technicals=technicals
-            )
-        
-            logger.info(f"Successfully processed price for: {ticker}")
-
-            producer.produce(
-                topic=TOPIC_NAME,
-                key=price.ticker,
-                value=price,
-                on_delivery=GenralProducerCallback(price)
-            )
-                
-            logger.info(f"Produced price info about {ticker} to Kafka topic {TOPIC_NAME}.")
-            
-            # This will reduce the strain on the free service (tnx)
-            sleep(1)
-
-        producer.flush()
-        logger.info("Kafka producer flushed successfully.")
+            finally:
+                producer.flush()
+                logger.info("Kafka producer flushed successfully.")
         
         
     telegram_api_down = TelegramOperator(
